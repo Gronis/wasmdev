@@ -6,5 +6,5 @@ members = [
 ]
 
 [workspace.dependencies]
-wasmdev_server = { path = "./wasmdev_server" }
 wasmdev        = { path = "./wasmdev" }
+wasmdev_server = { path = "./wasmdev_server" }

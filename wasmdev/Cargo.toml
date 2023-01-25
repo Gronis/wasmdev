@@ -1,17 +1,13 @@
-# cargo-features = ["per-package-target"]
-
 [package]
 name = "wasmdev"
 version = "0.1.0"
 edition = "2021"
 description = "A rust web development server library"
 license = "MIT"
-# default-target = "x86_64-apple-darwin"
 
 [lib]
 proc-macro = true
 
-# [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 [dependencies]
 wasmdev_server = { workspace = true }
 xshell = "0.2.3"
