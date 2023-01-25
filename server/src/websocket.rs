@@ -8,6 +8,8 @@ use sha1::{Sha1, Digest};
 
 use base64::{Engine, DecodeError};
 
+use self::http::{Request, Response};
+
 mod http;
 
 fn is_valid_websocket(request: &http::Request) -> bool {
@@ -25,24 +27,33 @@ fn compute_accept(websocket_key_header: &str) -> Result<String, DecodeError> {
     Ok(hash_b64)
 }
 
-fn make_websocket_response(sec_websocket_accept_header: http::Header) -> http::Response {
-    http::Response {
-        version: http::Version::V1_1,
-        status_code: http::StatusCode(101), 
-        headers: vec![ 
-            http::Header::upgrade("websocket"),
-            http::Header::connection("Upgrade"),
-            sec_websocket_accept_header,
-        ],
-    }
+fn make_websocket_response(request: &http::Request) -> Result<http::Response, String> {
+    request.headers
+        .iter()
+        .find_map(|header| { 
+            let http::Header::SecWebSocketKey(key) = header else { return None };
+            compute_accept(key).ok()
+        })
+        .map(|accept| {
+            http::Response {
+                version: http::Version::V1_1,
+                status_code: http::StatusCode(101), 
+                headers: vec![ 
+                    http::Header::upgrade("websocket"),
+                    http::Header::connection("Upgrade"),
+                    http::Header::SecWebSocketAccept(accept),
+                ],
+            }
+        }).ok_or("Unable to create websocket upgrade response from request".into())
 }
 
-fn make_http_response(status_code: http::StatusCode) -> http::Response {
-    http::Response {
+fn make_http_response(status_code: http::StatusCode, body: Option<String>) -> Result<http::Response, String> {
+    if body.is_some() { todo!() };
+    Ok(http::Response {
         version: http::Version::V1_1,
         status_code, 
         headers: vec![http::Header::ContentLength(0)],
-    }
+    })
 }
 
 pub struct Server {
@@ -50,56 +61,51 @@ pub struct Server {
     _connections: Vec<TcpStream>,
 }
 
-fn setup_websocket_connection(stream: TcpStream) -> Option<TcpStream>{
-    let valid_websocket_request = {
-        let mut buf_reader = BufReader::new(&stream);
-        let mut buf_writer = BufWriter::new(&stream);
-        // TODO: Be more sofisticated than this.
-        // This is a small but inefficient way of reading
-        // an http message.
-        let valid_websocket_request = loop {
-            buf_reader.fill_buf().ok()?;
-            if buf_reader.buffer().is_empty() { return None };
-            let Some((end_index, consume_count)) = buf_reader.buffer()
-                .windows(4)
-                .enumerate()
-                .find_map(|(i, range)| {
-                    let [a, b, c, d] = range else { return None };
-                    if *a == '\r' as u8 && *b == '\n' as u8 && *c == '\r' as u8 && *d == '\n' as u8 { 
-                        Some((i, i + 4)) 
-                    } else if *c == '\n' as u8 && *d == '\n' as u8 { 
-                        Some((i + 2, i + 4))
-                    } else { 
-                        None
-                    }
-                }) else { continue };
-                
-            let msg = from_utf8(&buf_reader.buffer()[0..end_index]).ok()?;
-            let request: http::Request = msg.parse().map_err(|err| dbg!(err)).ok()?;
-            buf_reader.consume(consume_count);
-            let valid_websocket_request = is_valid_websocket(&request);
-            let response = if valid_websocket_request {
-                request.headers.iter()
-                    .find_map(|header| { 
-                        let http::Header::SecWebSocketKey(key) = header else { return None };
-                        compute_accept(key).ok()
-                    })
-                    .map(|accept| http::Header::SecWebSocketAccept(accept))
-                    .map(make_websocket_response)?
-            } else { 
-                make_http_response(http::StatusCode(200))
-            };
-            // TODO: Maybe we could write to stream directly
-            // rather than converting to a String in-between?
-            print!("Sending:\n{}", response);
-            buf_writer.write_all(response.to_string().as_bytes()).ok()?;
-            buf_writer.flush().ok()?;
-            if valid_websocket_request { break true };
-        };
-        valid_websocket_request
+fn parse_request(reader: &mut BufReader<&TcpStream>) -> Result<Request, String>{
+    reader.fill_buf().map_err(|_| "Unable to read data from buffer")?;
+    if reader.buffer().is_empty() { return Err("Stream is closed (empty buffer)".into()) };
+    let Some(end_index) = reader.buffer()
+        .windows(4)
+        .enumerate()
+        .find_map(|(i, range)| {
+            let [a, b, c, d] = range else { return None };
+            if *a == b'\r' && *b == b'\n' && *c == b'\r' && *d == b'\n' { 
+                Some(i) // Dont include end-of-message \r\n\r\n
+            } else { None }
+        }) else { return Err("Message in buffer is incomplete".into()) };
+        
+    let msg = from_utf8(&reader.buffer()[0..end_index]).map_err(|_| "Unable to parse utf8 string")?;
+    let request: http::Request = msg.parse().map_err(|err| dbg!(err)).map_err(|_| "Unable to parse http request")?;
+    reader.consume(end_index + 4); // Consume end-of-message
+    Ok(request)
+}
+
+fn write_response(writer: &mut BufWriter<&TcpStream>, response: &Response) -> Result<(), String> {
+    writer.write_all(response.to_string().as_bytes()).map_err(|_| "Unable to write response to stream")?;
+    writer.flush().map_err(|_| "Unable to flush stream".into())
+}
+
+// Put in another file.
+struct Deferred <T: Fn() -> ()>{
+    f: T,
+}
+
+impl<T: Fn() -> ()> Drop for Deferred<T> {
+    fn drop(&mut self) {
+       let s: &Self = self;
+       let f = &(s.f);
+       f();
+    }
+}
+
+macro_rules! defer_expr { ($e: expr) => { $e } } // tt hack
+macro_rules! defer {
+    ( $($s:tt)* ) => {
+        let _deferred = Deferred { f: || {
+            defer_expr!({ $($s)* })
+        }}; 
     };
-    if valid_websocket_request { return Some(stream) };
-    None
+    () => {};
 }
 
 impl Server{
@@ -111,33 +117,45 @@ impl Server{
         // let connections = &mut self.connections;
         for stream in listener.incoming() {
             let stream = stream?;
+            let peer_addr = stream.peer_addr()?;
             thread::spawn(move || {
-                setup_websocket_connection(stream).map(|stream| -> io::Result<()> {
-                    let peer_addr = stream.peer_addr()?;
-                    println!("Got WebSocket Connection {}", peer_addr);
-                    let mut buf_reader = BufReader::new(&stream);
-                    let mut buf_writer = BufWriter::new(&stream);
-                    loop {
-                        let buffer = buf_reader.fill_buf()?;
-                        let length = buffer.len();
-                        if length == 0 { break };
-                        
-                        // work with buffer
-                        println!("From {peer_addr}: {buffer:?}");
-                        
-                        // ensure the bytes we worked with aren't returned again later
-                        buf_reader.consume(length);
-
-                        // Reply with static message
-                        let ws_message: [u8; 5] = [0x81, 0x03, b'h', b'e', b'j'];
-                        buf_writer.write_all(&ws_message)?;
-                        buf_writer.flush()?;
-
+                defer! { println!("Closed connection {peer_addr}") };
+                println!("Got Connection {}", peer_addr);
+                let mut reader = BufReader::new(&stream);
+                let mut writer = BufWriter::new(&stream);
+                let mut done = false;
+                loop {
+                    let Ok(req) = parse_request(&mut reader).map_err(|err| println!("{}", err)) else { return };
+                    let resp = if is_valid_websocket(&req) { 
+                        done = true;
+                        make_websocket_response(&req)
+                    } else {
+                        make_http_response(http::StatusCode(200), None)
                     };
-                    println!("Closed WebSocket Connection {peer_addr}");
-                    Ok(())
-                });
-                println!("Closed connection");
+                    let Ok(resp) = resp.map_err(|err| println!("{}", err)) else { continue };
+                    print!("Sending HTTP response to {peer_addr}:\n{resp}");
+                    let Ok(_) = write_response(&mut writer, &resp).map_err(|err| println!("{}", err)) else { continue };
+                    if done { break };
+                }
+                defer! { println!("Closed WebSocket Connection {peer_addr}") };
+                println!("Got WebSocket Connection {}", peer_addr);
+                loop {
+                    let Ok(buffer) = reader.fill_buf().map_err(|err| println!("{}", err)) else { return };
+                    let length = buffer.len();
+                    if length == 0 { break };
+                    
+                    // work with buffer
+                    println!("Received websocket message from {peer_addr}: {buffer:?}");
+                    
+                    // ensure the bytes we worked with aren't returned again later
+                    reader.consume(length);
+
+                    // Reply with static message
+                    let ws_message: [u8; 5] = [0x81, 0x03, b'h', b'e', b'j'];
+                    println!("Sending websocket message to {peer_addr}");
+                    let Ok(_) = writer.write_all(&ws_message).map_err(|err| println!("{}", err)) else { return };
+                    let Ok(_) = writer.flush().map_err(|err| println!("{}", err)) else { return };
+                };
             });
         }
         Ok(())
