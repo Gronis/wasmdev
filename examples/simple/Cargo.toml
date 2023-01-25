@@ -1,0 +1,19 @@
+[package]
+name = "simple"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wasmdev = { workspace = true }
+wasmdev_server = { workspace = true }
+console_error_panic_hook = "0.1.7"
+
+[dependencies.web-sys]
+version = "0.3.4"
+features = [
+  'Document',
+  'Element',
+  'HtmlElement',
+  'Node',
+  'Window',
+]

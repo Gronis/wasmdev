@@ -85,7 +85,7 @@ fn write_response(writer: &mut BufWriter<&TcpStream>, response: &Response) -> Re
     writer.flush().map_err(|_| "Unable to flush stream".into())
 }
 
-// Put in another file.
+// TODO; Put somewhere else.
 struct Deferred <T: Fn() -> ()>{
     f: T,
 }

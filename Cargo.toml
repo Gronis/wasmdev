@@ -1,6 +1,10 @@
 [workspace]
-
 members = [
-    "macro",
-    "server",
+    "wasmdev",
+    "wasmdev_server",
+    "examples/simple"
 ]
+
+[workspace.dependencies]
+wasmdev_server = { path = "./wasmdev_server" }
+wasmdev        = { path = "./wasmdev" }

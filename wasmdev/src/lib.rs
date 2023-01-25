@@ -6,15 +6,24 @@ use quote::quote;
 pub fn main(_attr: TokenStream, main_fn: TokenStream) -> TokenStream {
     // dbg!(&_attr);
     // dbg!(&main_fn);
-
+    
     let main_fn_wasm: TokenStream2 = main_fn.into();
     let main_fn_not_wasm = make_main_fn_not_wasm();
     
     quote! {
-        #[cfg(target_family = "wasm")]
-        #main_fn_wasm
         #[cfg(not(target_family = "wasm"))]
         #main_fn_not_wasm
+        #[cfg(target_family = "wasm")]
+        #main_fn_wasm
+    }.into()
+}
+
+#[proc_macro_attribute]
+pub fn import(_attr: TokenStream, import: TokenStream) -> TokenStream {
+    let import2: TokenStream2 = import.into();
+    quote! {
+        #[cfg(target_family = "wasm")]
+        #import2
     }.into()
 }
 
@@ -23,7 +32,7 @@ fn make_main_fn_not_wasm() -> TokenStream2 {
     quote!{
         fn main() {
             use std::net::TcpListener;
-            use server::websocket::Server;
+            use wasmdev_server::websocket::Server;
             let tcp_socket = TcpListener::bind("127.0.0.1:8123").expect("Unable to bind tcp port 8123");
             let mut server = Server::new(tcp_socket);
             // TODO: Add stuff here in order to:
