@@ -27,15 +27,13 @@ fn compute_accept(websocket_key_header: &str) -> Result<String, DecodeError> {
     Ok(hash_b64)
 }
 
-fn make_websocket_response(request: &http::Request) -> Result<http::Response, String> {
+fn make_websocket_accept_response(request: &http::Request) -> Result<http::Response, String> {
     request.headers
         .iter()
-        .find_map(|header| { 
+        .find_map(|header| {
             let http::Header::SecWebSocketKey(key) = header else { return None };
-            compute_accept(key).ok()
-        })
-        .map(|accept| {
-            http::Response {
+            let Ok(accept) = compute_accept(key) else { return None };
+            Some(http::Response {
                 version: http::Version::V1_1,
                 status_code: http::StatusCode(101), 
                 headers: vec![ 
@@ -43,7 +41,7 @@ fn make_websocket_response(request: &http::Request) -> Result<http::Response, St
                     http::Header::connection("Upgrade"),
                     http::Header::SecWebSocketAccept(accept),
                 ],
-            }
+            })
         }).ok_or("Unable to create websocket upgrade response from request".into())
 }
 
@@ -118,6 +116,7 @@ impl Server{
         for stream in listener.incoming() {
             let stream = stream?;
             let peer_addr = stream.peer_addr()?;
+            // Each connection uses its own thread. Simple but does not scale. Fine for dev server.
             thread::spawn(move || {
                 defer! { println!("Closed connection {peer_addr}") };
                 println!("Got Connection {}", peer_addr);
@@ -128,7 +127,7 @@ impl Server{
                     let Ok(req) = parse_request(&mut reader).map_err(|err| println!("{}", err)) else { return };
                     let resp = if is_valid_websocket(&req) { 
                         done = true;
-                        make_websocket_response(&req)
+                        make_websocket_accept_response(&req)
                     } else {
                         make_http_response(http::StatusCode(200), None)
                     };
