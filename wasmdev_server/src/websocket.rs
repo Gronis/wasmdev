@@ -54,11 +54,6 @@ fn make_http_response(status_code: http::StatusCode, body: Option<String>) -> Re
     })
 }
 
-pub struct Server {
-    listener: TcpListener,
-    _connections: Vec<TcpStream>,
-}
-
 fn parse_request(reader: &mut BufReader<&TcpStream>) -> Result<Request, String>{
     reader.fill_buf().map_err(|_| "Unable to read data from buffer")?;
     if reader.buffer().is_empty() { return Err("Stream is closed (empty buffer)".into()) };
@@ -104,6 +99,23 @@ macro_rules! defer {
         }}; 
     };
     () => {};
+}
+
+// This struct configures how the server should respond to requests
+pub struct Config {
+
+}
+
+impl Config {
+    pub fn new() -> Config { Config {} }
+
+    pub fn on_get(&mut self, _path: &str, _response: &str) {
+    }
+}
+
+pub struct Server {
+    listener: TcpListener,
+    _connections: Vec<TcpStream>,
 }
 
 impl Server{
