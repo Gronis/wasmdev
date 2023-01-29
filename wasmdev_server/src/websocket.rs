@@ -1,7 +1,9 @@
 use std::net::{TcpListener, TcpStream};
 use std::io::{self, BufWriter};
 use std::io::{BufRead, BufReader, Write};
+use std::path::Path;
 use std::str::from_utf8;
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 use sha1::{Sha1, Digest};
@@ -102,25 +104,26 @@ macro_rules! defer {
 }
 
 // This struct configures how the server should respond to requests
-pub struct Config {
+pub struct ServerConfig {
 
 }
 
-impl Config {
-    pub fn new() -> Config { Config {} }
+impl ServerConfig {
+    pub fn new() -> ServerConfig { ServerConfig {} }
 
-    pub fn on_get(&mut self, _path: &str, _response: &str) {
+    pub fn on_get(&mut self, _path: &Path, _headers: Vec<http::Header>, _response: &[u8]) {
     }
 }
 
 pub struct Server {
     listener: TcpListener,
+    _config: Arc<Mutex<ServerConfig>>,
     _connections: Vec<TcpStream>,
 }
 
 impl Server{
-    pub fn new(listener: TcpListener) -> Self {
-        Server { listener, _connections: vec![] }
+    pub fn new(listener: TcpListener, config: Arc<Mutex<ServerConfig>>) -> Self {
+        Server { listener, _config: config, _connections: vec![] }
     }
     pub fn listen(&mut self) -> io::Result<()> {
         let listener = &self.listener;

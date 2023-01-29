@@ -16,92 +16,93 @@ pub fn main(_attr: TokenStream, main_fn: TokenStream) -> TokenStream {
     }.into()
 }
 
-fn generate_make_src_watcher() -> TokenStream2 {
-    quote!{
-        use std::path::Path;
-        use wasmdev::notify::{recommended_watcher, Watcher, RecommendedWatcher, RecursiveMode, Result, EventHandler};
-        use wasmdev::notify::event::{Event, EventKind, ModifyKind};
-
-        const SRC_PATH: &'static str = concat!(env!("CARGO_MANIFEST_DIR"), "/", "src");
-
-        fn make_src_watcher(mut on_wasm_code_updated: impl EventHandler) -> impl Watcher {
-            let src_path = Path::new(SRC_PATH);
-            let mut watcher = recommended_watcher(move |e: Result<Event>| -> () {
-                let Ok(event)                 = &e           else { return };
-                let EventKind::Modify(modify) = &event.kind  else { return };
-                let ModifyKind::Data(_)       = modify       else { return };
-                
-                on_wasm_code_updated.handle_event(e);
-            }).expect("Unable to initiate watcher");
-            watcher.watch(src_path, RecursiveMode::Recursive).expect("Unable to watch src dir");
-            watcher
-        };
-    }
-}
-
-fn generate_build_wasm() -> TokenStream2 {
-    quote!{
-        use std::fs::File;
-        use std::io::prelude::*;
-        use wasmdev::xshell::{Shell, cmd};
-
-        fn build_wasm() -> Option<Vec<u8>> {
-            println!("\x1b[1m\x1b[92m    Building\x1b[0m wasm32-unknown-unknown target");
-            let sh = Shell::new().expect("Unable to create shell");
-            cmd!(sh, "cargo build --target wasm32-unknown-unknown").quiet().run().ok()?;
-    
-            let mut wasm_file = File::open("target/wasm32-unknown-unknown/debug/simple.wasm").ok()?;
-            let mut wasm_code = Vec::new();
-            wasm_file.read_to_end(&mut wasm_code).ok()?;
-            println!("\x1b[1m\x1b[92m      Loaded\x1b[0m wasm32-unknown-unknown code");
-            Some(wasm_code)
-        }
-    }
-}
-
 fn make_server_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
-    let build_wasm       = generate_build_wasm();
-    let make_src_watcher = generate_make_src_watcher();
-
     let index_js   = include_str!("index.js");
     let index_html = include_str!("index.html");
-    let index_html = format!("{index_html}<script>{index_js}</script>"); 
+
+    let _index_html = format!("{index_html}<script>{index_js}</script>"); 
+
     quote!{
         fn main() {
+            use std::sync::{Arc,Mutex};
             use std::net::TcpListener;
-            use wasmdev::{Server, Config};
-
+            use std::path::Path;
+            use std::str::from_utf8;
+            use wasmdev::{Server, ServerConfig, build_wasm, load_file, make_watcher};
+            
             // Make sure rust analyzer analyze the wasm code for better code-completion:
             #[allow(dead_code)]
             #wasm_main_fn
 
-            // Setup watcher that watches and builds the wasm code:
-            #build_wasm
-            #make_src_watcher
+            static wasm_path: &str       = concat!(env!("CARGO_MANIFEST_DIR"), "/", "target/wasm32-unknown-unknown/debug", "/", env!("CARGO_PKG_NAME"), ".wasm");
+            static src_path: &str        = concat!(env!("CARGO_MANIFEST_DIR"), "/", "src");
+            static index_html_path: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/", "index.html"); 
+            // TODO: make path to static files configurable, including index.html -> ^^^^^^^^^^
 
-            let tcp_socket = TcpListener::bind("127.0.0.1:8123").expect("Unable to bind tcp port 8123");
-            
-            use std::sync::{Arc, Mutex};
-            let config = Arc::new(Mutex::new(Config::new()));
-            let index_html = #index_html;
+            let server_config = Arc::new(Mutex::new(ServerConfig::new()));
             {
-                let mut config = config.lock().unwrap();
-                config.on_get("/", index_html);
+                let server_config = server_config.lock().unwrap();
+                // server_config
+                //     .on_get_request(Path::new("/"))
+                //     .internal_redirect(Path::new("/index.html"));
+                // server_config
+                //     .on_get_request(Path::new("/index.html"))
+                //     .set_response_body(#index_html.as_bytes());
             }
-            let mut server = Server::new(tcp_socket);
 
-            let _watcher = make_src_watcher(move |_| {
-                let Some(code) = build_wasm() else { return };
-            });
-            let code = build_wasm().expect("Initial wasm compilation failed");
+            let build_load_and_serve_wasm = {
+                let server_config = server_config.clone();
+                move || {
+                    println!("\x1b[1m\x1b[92m    Building\x1b[0m wasm32-unknown-unknown target");
+                    let Some(_) = build_wasm() else { return };
+                    let Some(code) = load_file(Path::new(wasm_path)) else { return };
+                    println!("\x1b[1m\x1b[92m      Loaded\x1b[0m {}{}", env!("CARGO_PKG_NAME"), ".wasm");
+                    // server_config.lock().unwrap()
+                    //     .on_get_request(Path::new("/index.wasm"))
+                    //     .set_response_body(&code);
+                }
+            };
+            
+            let load_and_serve_file = {
+                let server_config = server_config.clone();
+                move |file_path| {
+                    let Some(file_contents) = load_file(file_path) else { return };
+                    // server_config.lock().unwrap()
+                    //     .on_get_request(Path::new("/").join(file_path).as_path())
+                    //     .set_response_body(&file_contents)
+                }
+            };
+            
+            let load_and_serve_index_html = {
+                let server_config = server_config.clone();
+                move || {
+                    let Some(index_html) = load_file(Path::new(index_html_path)) else { return };
+                    let index_html = from_utf8(&index_html).expect("index.html is not utf8 encoded.");
+                    let index_html = format!("{}<script>{}</script>",index_html, #index_js); 
+                    println!("\x1b[1m\x1b[92m      Loaded\x1b[0m index.html");
+                    // server_config.lock().unwrap()
+                    //     .on_get_request(Path::new("/index.html"))
+                    //     .set_response_body(index_html.as_bytes())
+                }
+            };
 
-            // TODO: Add stuff here in order to:
-            // - serve index.html
-            // - serve wasm code
-            // - build wasm code
-            // - watch filesystem for changes
-            // - add hot reload to wasm code
-            // - figure out a way to run tests in browser, but show everyting in cli
+            // Watcher on src-code required.
+            build_load_and_serve_wasm();
+            let _watcher_index_wasm = make_watcher(Path::new(src_path), move |_| build_load_and_serve_wasm())
+                .expect("Unable to watch src folder, required for hot-reload.");
+
+            // Providing a custom index.html is optional, so open watcher is allowed to fail silently here.
+            load_and_serve_index_html();
+            let _watcher_index_html = make_watcher(Path::new(index_html_path), move |_| load_and_serve_index_html());
+            
+            // TODO:
+            // - serve get requests
+            // - find all files in "static" path and tell server those paths exists
+            // - watch "static" path for changes
+            // - notify frontend of an update using websocket
+            
+            let tcp_socket = TcpListener::bind("127.0.0.1:8123").expect("Unable to bind tcp port 8123");
+            let mut server = Server::new(tcp_socket, server_config);
 
             println!("\x1b[1m\x1b[92m            \x1b[0m ┏\x1b[0m━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m┓");
             println!("\x1b[1m\x1b[92m     Serving\x1b[0m ┃\x1b[1m http://127.0.0.1:8123 \x1b[0m┃ <- Click to open your app! ");
