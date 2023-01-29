@@ -28,3 +28,29 @@ pub fn make_watcher(path: &Path, mut event_handler: impl EventHandler) -> Option
     watcher.watch(path, RecursiveMode::Recursive).ok()?;
     Some(watcher)
 }
+
+// TODO; Put somewhere else.
+pub struct Deferred <T: Fn() -> ()>{
+    pub f: T,
+}
+
+impl<T: Fn() -> ()> Drop for Deferred<T> {
+    fn drop(&mut self) {
+       let s: &Self = self;
+       let f = &(s.f);
+       f();
+    }
+}
+
+macro_rules! defer_expr { ($e: expr) => { $e } } // tt hack
+macro_rules! defer {
+    ( $($s:tt)* ) => {
+        let _deferred = crate::utils::Deferred { f: || {
+            crate::utils::defer_expr!({ $($s)* })
+        }}; 
+    };
+    () => {};
+}
+
+pub(crate) use defer_expr;
+pub(crate) use defer;

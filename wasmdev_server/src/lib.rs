@@ -1,5 +1,7 @@
-pub mod websocket;
+pub mod http;
 pub mod utils;
+
+pub use http::{Server, ServerConfig};
 
 // #[cfg(test)]
 // mod tests {
