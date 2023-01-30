@@ -1,8 +1,6 @@
 
 #[wasmdev::main]
 fn main() {
-    console_error_panic_hook::set_once();
-
     // Grab document body
     let window = web_sys::window()
         .expect("no global `window` exists");
@@ -14,7 +12,7 @@ fn main() {
     // Create Hello World paragraph
     let val = document.create_element("p")
         .expect("Unable to create element");
-    val.set_text_content(Some("Hello Rust!"));
+    val.set_text_content(Some("Hello World"));
 
     // Append text to document body:
     body.append_child(&val)

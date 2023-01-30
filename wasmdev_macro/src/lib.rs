@@ -5,8 +5,9 @@ use quote::quote;
 #[proc_macro_attribute]
 pub fn main(_attr: TokenStream, main_fn: TokenStream) -> TokenStream {
 
-    let wasm_main_fn:   TokenStream2 = main_fn.into();
-    let server_main_fn: TokenStream2 = make_server_main_fn(&wasm_main_fn);
+    let wasm_fn: TokenStream2 = main_fn.into();
+    let wasm_main_fn   = make_wasm_main_fn(&wasm_fn);
+    let server_main_fn = make_server_main_fn(&wasm_fn);
 
     quote! {
         #[cfg(not(target_family = "wasm"))]
@@ -14,6 +15,16 @@ pub fn main(_attr: TokenStream, main_fn: TokenStream) -> TokenStream {
         #[cfg(target_family = "wasm")]
         #wasm_main_fn
     }.into()
+}
+
+fn make_wasm_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
+    quote! {
+        fn main() {
+            #wasm_main_fn
+            console_error_panic_hook::set_once();
+            main();
+        }
+    }
 }
 
 fn make_server_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
