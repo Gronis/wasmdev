@@ -1,5 +1,5 @@
 use proc_macro::TokenStream;
-use proc_macro2::{TokenStream as TokenStream2};
+use proc_macro2::{TokenStream as TokenStream2, TokenTree};
 use quote::quote;
 
 #[proc_macro_attribute]
@@ -17,12 +17,23 @@ pub fn main(_attr: TokenStream, main_fn: TokenStream) -> TokenStream {
     }.into()
 }
 
+fn get_fn_name(func: &TokenStream2) -> Option<TokenTree> {
+    let mut it = func.clone().into_iter().skip_while(|tt| {
+        let TokenTree::Ident(ident) = tt else { return true };
+        ident.to_string() != "fn"
+    });
+    it.next(); // Skip "fn" identifier
+    it.next()  // Should be function name identifier
+}
+
 fn make_wasm_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
+    let wasm_main_fn_ident = get_fn_name(wasm_main_fn)
+        .expect("Unable to get function name of main function");
     quote! {
         fn main() {
             #wasm_main_fn
             wasmdev::console_error_panic_hook::set_once();
-            main();
+            #wasm_main_fn_ident ();
         }
     }
 }
@@ -34,6 +45,8 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
     let is_release   = !cfg!(debug_assertions);
     let release_mode = if is_release {"release"} else {"debug"};
 
+    let wasm_main_fn_ident = get_fn_name(wasm_main_fn).expect("Unable to get function name of main function");
+
     quote!{
         fn main() {
             use std::net::TcpListener;
@@ -44,16 +57,17 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
             use wasmdev::{Server, ServerConfig};
             use wasmdev::utils::{build_wasm, load_file, make_watcher};
 
-            // Make sure rust analyzer analyze the wasm code for better code-completion:
-            #[allow(dead_code)]
+            // Make sure rust analyzer analyze the wasm code for better code-completion experience:
             #wasm_main_fn
+            // Make a call to it that never executes to avoid compiler warnings:
+            if false { #wasm_main_fn_ident () }
 
+            // TODO: make path to static files configurable, including index.html:
             static wasm_path:       &str = concat!("target/wasm32-unknown-unknown", "/", #release_mode, "/", env!("CARGO_PKG_NAME"), ".wasm");
             static index_js_path:   &str = concat!("target/wasm32-unknown-unknown", "/", #release_mode, "/", env!("CARGO_PKG_NAME"), ".js");
             static index_wasm_path: &str = concat!("target/wasm32-unknown-unknown", "/", #release_mode, "/", env!("CARGO_PKG_NAME"), "_bg.wasm");
             static index_html_path: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/", "index.html");
             static rust_src_path:   &str = concat!(env!("CARGO_MANIFEST_DIR"), "/", "src");
-            // TODO: make path to static files configurable, including index.html -> ^^^^^^^^^^
 
             let server_config = Arc::new(RwLock::new(ServerConfig::new()));
             {
