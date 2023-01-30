@@ -9,10 +9,10 @@ use super::{Request, Response, Header, Version, StatusCode};
 
 
 pub fn is_valid_websocket(request: &Request) -> bool {
-    request.match_header(|h| matches!(h, Header::Connection(header) if header == "Upgrade")) && 
-    request.match_header(|h| matches!(h, Header::Upgrade(header) if header == "websocket")) && 
-    request.match_header(|h| matches!(h, Header::SecWebSocketVersion(13))) && 
-    request.match_header(|h| matches!(h, Header::SecWebSocketKey(_)))
+    request.headers().any(|h| matches!(h, Header::Connection(header) if header == "Upgrade")) && 
+    request.headers().any(|h| matches!(h, Header::Upgrade(header) if header == "websocket")) && 
+    request.headers().any(|h| matches!(h, Header::SecWebSocketVersion(13))) && 
+    request.headers().any(|h| matches!(h, Header::SecWebSocketKey(_)))
 }
 
 pub fn compute_accept(websocket_key_header: &str) -> Result<String, DecodeError> {
@@ -37,16 +37,17 @@ pub fn make_websocket_accept_response(request: &Request) -> Result<Response, Str
                     Header::connection("Upgrade"),
                     Header::SecWebSocketAccept(accept),
                 ],
+                body: None,
             })
         }).ok_or("Unable to create websocket upgrade response from request".into())
 }
 
-pub fn make_http_response(status_code: StatusCode, body: Option<String>) -> Result<Response, String> {
-    if body.is_some() { todo!() };
+pub fn make_http_response(status_code: StatusCode, headers: Vec<Header>, body: Option<&Vec<u8>>) -> Result<Response, String> {
     Ok(Response {
         version: Version::V1_1,
         status_code, 
-        headers: vec![Header::ContentLength(0)],
+        headers,
+        body,
     })
 }
 
@@ -70,7 +71,11 @@ pub fn parse_request(reader: &mut BufReader<&TcpStream>) -> Result<Request, Stri
 }
 
 pub fn write_response(writer: &mut BufWriter<&TcpStream>, response: &Response) -> Result<(), String> {
-    writer.write_all(response.to_string().as_bytes()).map_err(|_| "Unable to write response to stream")?;
+    writer.write_all(response.to_string().as_bytes()).map_err(|_| "Unable to write response header to stream")?;
+    if let Some(body) = &response.body {
+        writer.write_all(body).map_err(|_| "Unable to write response body to stream")?;
+        writer.write_all("\r\n".as_bytes()).map_err(|_| "Unable to write response body to stream")?;
+    }
     writer.flush().map_err(|_| "Unable to flush stream".into())
 }
 

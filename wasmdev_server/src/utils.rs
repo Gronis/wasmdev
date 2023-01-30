@@ -1,6 +1,5 @@
 use std::fs::File;
 use std::io::prelude::*;
-use xshell::{Shell, cmd};
 use std::path::Path;
 use notify::{recommended_watcher, Watcher, RecursiveMode, Result, EventHandler};
 use notify::event::{Event, EventKind, ModifyKind};
@@ -12,9 +11,17 @@ pub fn load_file(file_path: &Path) -> Option<Vec<u8>> {
     Some(file_contents)
 }
 
-pub fn build_wasm() -> Option<()> {
+#[cfg(not(target_family = "wasm"))]
+pub fn build_wasm(input_path: &str) -> Option<()> {
+    use xshell::{Shell, cmd};
+    use wasm_bindgen_cli_support::Bindgen;
+
     let sh = Shell::new().expect("Unable to create shell");
-    cmd!(sh, "cargo build --target wasm32-unknown-unknown").quiet().run().ok()
+    cmd!(sh, "cargo build --target wasm32-unknown-unknown").quiet().run().ok()?;
+    let mut b = Bindgen::new();
+    b.input_path(input_path).web(true).map_err(|err| println!("{}", err)).ok()?;
+    let output_path = Path::new(input_path).parent().expect("No parent when building wasm");
+    b.generate(output_path).map_err(|err| println!("{}", err)).ok()
 }
 
 pub fn make_watcher(path: &Path, mut event_handler: impl EventHandler) -> Option<impl Watcher> {

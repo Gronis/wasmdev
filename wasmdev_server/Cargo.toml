@@ -8,3 +8,6 @@ base64 = "0.21.0"
 sha1 = "0.10.5"
 xshell = "0.2.3"
 notify = "5.0.0"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+wasm-bindgen-cli-support = "0.2.83"
