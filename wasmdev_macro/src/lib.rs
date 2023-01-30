@@ -30,7 +30,7 @@ fn make_wasm_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
 fn make_server_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
     let index_js   = include_str!("index.js");
     let index_html = include_str!("index.html");
-    let index_html = format!("{index_html}<script type=\"module\">{index_js}</script>"); 
+    let index_html = format!("{index_html}\n<script type=\"module\">{index_js}</script>"); 
 
     quote!{
         fn main() {
@@ -69,12 +69,11 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
             let build_load_and_serve_app = {
                 let mut server_config = server_config.clone();
                 move || {
-                    println!("\x1b[1m\x1b[92m    Building\x1b[0m wasm32-unknown-unknown target");
+                    println!("\x1b[1m\x1b[92m    Building\x1b[0m wasm target");
                     let Some(_)         = build_wasm(wasm_path)                 else { return };
                     let Some(wasm_code) = load_file(Path::new(index_wasm_path)) else { return };
                     let Some(js_code)   = load_file(Path::new(index_js_path))   else { return };
-                    println!("\x1b[1m\x1b[92m      Loaded\x1b[0m index.wasm");
-                    println!("\x1b[1m\x1b[92m      Loaded\x1b[0m index.js");
+                    println!("\x1b[1m\x1b[92m      Loaded\x1b[0m index.wasm, index.js");
                     let mut server_config = server_config.write().unwrap();
                     server_config
                         .on_get_request("/index.wasm")
@@ -103,7 +102,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
                 move || {
                     let Some(index_html) = load_file(Path::new(index_html_path)) else { return };
                     let index_html = from_utf8(&index_html).expect("index.html is not utf8 encoded.");
-                    let index_html = format!("{}<script type=\"module\">{}</script>",index_html, #index_js); 
+                    let index_html = format!("{}\n<script type=\"module\">{}</script>",index_html, #index_js); 
                     println!("\x1b[1m\x1b[92m      Loaded\x1b[0m index.html");
                     server_config.write().unwrap()
                         .on_get_request("/index.html")
