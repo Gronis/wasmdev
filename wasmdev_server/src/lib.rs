@@ -1,16 +1,14 @@
+
+
+#[cfg(not(target_family = "wasm"))]
 pub mod http;
+#[cfg(not(target_family = "wasm"))]
 pub mod utils;
 
+#[cfg(not(target_family = "wasm"))]
 pub use http::{Server, ServerConfig};
-pub use http::{EndpointWithoutContentBuilder, EndpointAnyBuilder};
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-
-//     #[test]
-//     fn it_works() {
-//         let result = add(2, 2);
-//         assert_eq!(result, 4);
-//     }
-// }
+#[cfg(not(target_family = "wasm"))]
+pub mod prelude {
+    pub use crate::http::{EndpointWithoutContentBuilder, EndpointAnyBuilder};
+}

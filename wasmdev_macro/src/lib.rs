@@ -23,11 +23,12 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
 
     quote!{
         fn main() {
-            use std::sync::{Arc,RwLock};
             use std::net::TcpListener;
             use std::path::Path;
             use std::str::from_utf8;
-            use wasmdev::{Server, ServerConfig, EndpointWithoutContentBuilder, EndpointAnyBuilder};
+            use std::sync::{Arc,RwLock};
+            use wasmdev::prelude::*;
+            use wasmdev::{Server, ServerConfig};
             use wasmdev::utils::{build_wasm, load_file, make_watcher};
 
             // Make sure rust analyzer analyze the wasm code for better code-completion:
