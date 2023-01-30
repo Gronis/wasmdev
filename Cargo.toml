@@ -6,6 +6,10 @@ members = [
     "examples/simple"
 ]
 
+[profile.release]
+lto = true
+opt-level = 'z'
+
 [workspace.dependencies]
 wasmdev        = { path = "./wasmdev" }
 wasmdev_macro  = { path = "./wasmdev_macro" }

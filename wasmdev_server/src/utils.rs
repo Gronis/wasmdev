@@ -12,14 +12,26 @@ pub fn load_file(file_path: &Path) -> Option<Vec<u8>> {
 }
 
 #[cfg(not(target_family = "wasm"))]
-pub fn build_wasm(input_path: &str) -> Option<()> {
+pub fn build_wasm(input_path: &str, is_release: bool) -> Option<()> {
     use xshell::{Shell, cmd};
     use wasm_bindgen_cli_support::Bindgen;
 
+    let args = if is_release { 
+        vec!["--release", "--target", "wasm32-unknown-unknown"]
+    } else {
+        vec!["--target", "wasm32-unknown-unknown"]
+    };
     let sh = Shell::new().expect("Unable to create shell");
-    cmd!(sh, "cargo build --target wasm32-unknown-unknown").quiet().run().ok()?;
+    cmd!(sh, "cargo build").args(args).quiet().run().ok()?;
     let mut b = Bindgen::new();
-    b.input_path(input_path).web(true).map_err(|err| println!("{}", err)).ok()?;
+    b.input_path(input_path)
+        .web(true)
+        .map_err(|err| println!("{}", err)).ok()?
+        .demangle(true)
+        .debug(!is_release)
+        .remove_name_section(is_release)
+        .remove_producers_section(is_release);
+
     let output_path = Path::new(input_path).parent().expect("No parent when building wasm");
     b.generate(output_path).map_err(|err| println!("{}", err)).ok()
 }

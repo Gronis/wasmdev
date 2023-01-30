@@ -1,4 +1,3 @@
-
 #[wasmdev::main]
 fn main() {
     // Grab document body

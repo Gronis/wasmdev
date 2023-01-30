@@ -28,9 +28,11 @@ fn make_wasm_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
 }
 
 fn make_server_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
-    let index_js   = include_str!("index.js");
-    let index_html = include_str!("index.html");
-    let index_html = format!("{index_html}\n<script type=\"module\">{index_js}</script>"); 
+    let index_js     = include_str!("index.js");
+    let index_html   = include_str!("index.html");
+    let index_html   = format!("{index_html}\n<script type=\"module\">{index_js}</script>"); 
+    let is_release   = !cfg!(debug_assertions);
+    let release_mode = if is_release {"release"} else {"debug"};
 
     quote!{
         fn main() {
@@ -46,9 +48,9 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
             #[allow(dead_code)]
             #wasm_main_fn
 
-            static wasm_path:       &str = concat!("target/wasm32-unknown-unknown/debug", "/", env!("CARGO_PKG_NAME"), ".wasm");
-            static index_js_path:   &str = concat!("target/wasm32-unknown-unknown/debug", "/", env!("CARGO_PKG_NAME"), ".js");
-            static index_wasm_path: &str = concat!("target/wasm32-unknown-unknown/debug", "/", env!("CARGO_PKG_NAME"), "_bg.wasm");
+            static wasm_path:       &str = concat!("target/wasm32-unknown-unknown", "/", #release_mode, "/", env!("CARGO_PKG_NAME"), ".wasm");
+            static index_js_path:   &str = concat!("target/wasm32-unknown-unknown", "/", #release_mode, "/", env!("CARGO_PKG_NAME"), ".js");
+            static index_wasm_path: &str = concat!("target/wasm32-unknown-unknown", "/", #release_mode, "/", env!("CARGO_PKG_NAME"), "_bg.wasm");
             static index_html_path: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/", "index.html");
             static rust_src_path:   &str = concat!(env!("CARGO_MANIFEST_DIR"), "/", "src");
             // TODO: make path to static files configurable, including index.html -> ^^^^^^^^^^
@@ -70,7 +72,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
                 let mut server_config = server_config.clone();
                 move || {
                     println!("\x1b[1m\x1b[92m    Building\x1b[0m wasm target");
-                    let Some(_)         = build_wasm(wasm_path)                 else { return };
+                    let Some(_)         = build_wasm(wasm_path, #is_release)    else { return };
                     let Some(wasm_code) = load_file(Path::new(index_wasm_path)) else { return };
                     let Some(js_code)   = load_file(Path::new(index_js_path))   else { return };
                     println!("\x1b[1m\x1b[92m      Loaded\x1b[0m index.wasm, index.js");
