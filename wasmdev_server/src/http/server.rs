@@ -17,16 +17,16 @@ pub struct Endpoint{
     response_action: Option<ResponseAction>,
 }
 
-pub struct EndpointAny {}
-pub trait EndpointAnyBuilder {
+pub struct EndpointHasResponse {}
+pub trait EndpointBuilderHasResponse {
     fn build(self);
     fn add_response_header(&mut self, header: Header) -> &mut Self;
 }
 
-pub struct EndpointWithoutContent {}
-pub trait EndpointWithoutContentBuilder<'a> : EndpointAnyBuilder {
-    fn internal_redirect(self, path: &'a str) -> EndpointBuilder<'a, EndpointAny>;
-    fn set_response_body(self, body: Vec<u8>) -> EndpointBuilder<'a, EndpointAny>;
+pub struct EndpointNoResponse {}
+pub trait EndpointBuilderNoResponse<'a> : EndpointBuilderHasResponse {
+    fn internal_redirect(self, path: &'a str) -> EndpointBuilder<'a, EndpointHasResponse>;
+    fn set_response_body(self, body: Vec<u8>) -> EndpointBuilder<'a, EndpointHasResponse>;
 }
 
 pub enum ResponseAction {
@@ -48,7 +48,7 @@ pub struct EndpointBuilder<'a, T> {
 //     }
 // }
 
-impl <'a, T> EndpointAnyBuilder for EndpointBuilder<'a, T> {
+impl <'a, T> EndpointBuilderHasResponse for EndpointBuilder<'a, T> {
     #[inline]
     fn build(self) {
         let mut endpoint = self.endpoint;
@@ -79,9 +79,9 @@ impl <'a, T> EndpointAnyBuilder for EndpointBuilder<'a, T> {
     }
 }
 
-impl <'a> EndpointWithoutContentBuilder<'a> for EndpointBuilder<'a, EndpointWithoutContent> {
+impl <'a> EndpointBuilderNoResponse<'a> for EndpointBuilder<'a, EndpointNoResponse> {
     #[inline]
-    fn internal_redirect(self, path: &'a str) -> EndpointBuilder<'a, EndpointAny> {
+    fn internal_redirect(self, path: &'a str) -> EndpointBuilder<'a, EndpointHasResponse> {
         EndpointBuilder { 
             server_config: self.server_config, 
             path: self.path,
@@ -93,7 +93,7 @@ impl <'a> EndpointWithoutContentBuilder<'a> for EndpointBuilder<'a, EndpointWith
         }
     }
     #[inline]
-    fn set_response_body(self, body: Vec<u8>) -> EndpointBuilder<'a, EndpointAny> {
+    fn set_response_body(self, body: Vec<u8>) -> EndpointBuilder<'a, EndpointHasResponse> {
         EndpointBuilder { 
             server_config: self.server_config,
             path: self.path,
@@ -125,7 +125,7 @@ impl ServerConfig {
         }
     }
 
-    pub fn on_get_request<'a>(&'a mut self, path: &'a str) -> EndpointBuilder<EndpointWithoutContent> {
+    pub fn on_get_request<'a>(&'a mut self, path: &'a str) -> EndpointBuilder<EndpointNoResponse> {
         EndpointBuilder { 
             server_config: self, 
             path,
