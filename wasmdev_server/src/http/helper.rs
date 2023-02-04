@@ -1,5 +1,4 @@
-use std::net::{TcpStream};
-use std::io::{BufWriter};
+use std::io::{BufWriter, Read};
 use std::io::{BufRead, BufReader, Write};
 use std::str::from_utf8;
 use sha1::{Sha1, Digest};
@@ -51,7 +50,7 @@ pub fn make_http_response(status_code: StatusCode, headers: Vec<Header>, body: O
     })
 }
 
-pub fn parse_request(reader: &mut BufReader<&TcpStream>) -> Result<Request, String>{
+pub fn parse_request<T: Read>(reader: &mut BufReader<T>) -> Result<Request, String>{
     reader.fill_buf().map_err(|_| "Unable to read data from buffer")?;
     if reader.buffer().is_empty() { return Err("Stream is closed (empty buffer)".into()) };
     let Some(end_index) = reader.buffer()
@@ -70,7 +69,7 @@ pub fn parse_request(reader: &mut BufReader<&TcpStream>) -> Result<Request, Stri
     Ok(request)
 }
 
-pub fn write_response(writer: &mut BufWriter<&TcpStream>, response: &Response) -> Result<(), String> {
+pub fn write_response<T: Write>(writer: &mut BufWriter<T>, response: &Response) -> Result<(), String> {
     writer.write_all(response.to_string().as_bytes()).map_err(|_| "Unable to write response header to stream")?;
     if let Some(body) = &response.body {
         writer.write_all(body).map_err(|_| "Unable to write response body to stream")?;

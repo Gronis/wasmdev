@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use std::net::{TcpListener, TcpStream};
+use std::net::{TcpListener, TcpStream, SocketAddr};
 use std::io::{self, BufWriter};
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
@@ -138,36 +138,50 @@ impl ServerConfig {
     }
 }
 
+#[derive(Clone)]
+pub struct Client {
+    writer: Arc<RwLock<BufWriter<TcpStream>>>,
+    addr: SocketAddr,
+}
+
+#[derive(Clone)]
 pub struct Server {
-    listener: TcpListener,
-    config: Arc<RwLock<ServerConfig>>,
-    _connections: Vec<TcpStream>,
+    pub config: Arc<RwLock<ServerConfig>>,
+    clients: Arc<RwLock<Vec<Client>>>,
 }
 
 impl Server{
-    pub fn new(listener: TcpListener, config: Arc<RwLock<ServerConfig>>) -> Self {
-        Server { listener, config: config, _connections: vec![] }
+    pub fn new() -> Self {
+        Server { config: Arc::new(RwLock::new(ServerConfig::new())), clients: Arc::new(RwLock::new(vec![])) }
     }
-    pub fn listen(&mut self) -> io::Result<()> {
-        let listener = &self.listener;
-        // let connections = &mut self.connections;
+    pub fn broadcast(&self, msg: &[u8]) {
+        for client in self.clients.read().unwrap().iter() {
+            let mut writer = client.writer.write().unwrap();
+            let Ok(_) = writer.write_all(&[0x81, msg.len() as u8]).map_err(|err| println!("{}", err)) else { continue };
+            let Ok(_) = writer.write_all(msg)                     .map_err(|err| println!("{}", err)) else { continue };
+            let Ok(_) = writer.flush()                            .map_err(|err| println!("{}", err)) else { continue };
+        }
+    }
+    pub fn listen(&self, listener: TcpListener) -> io::Result<()> {
         for stream in listener.incoming() {
             let stream = stream?;
             let peer_addr = stream.peer_addr()?;
             let config = self.config.clone();
+            let clients = self.clients.clone();
+            let mut reader = BufReader::new(stream.try_clone()?);
+            let mut writer = BufWriter::new(stream);
+
             // Each connection uses its own thread. Simple but does not scale. Fine for dev server.
             thread::spawn(move || {
                 defer! { println!("Closed connection {peer_addr}") };
                 println!("Got Connection {}", peer_addr);
-                let mut reader = BufReader::new(&stream);
-                let mut writer = BufWriter::new(&stream);
                 let mut upgrade_connection = false;
                 loop {
-                    let Ok(req) = parse_request(&mut reader).map_err(|err| println!("{}", err)) else { return };
+                    let Ok(req) = parse_request(&mut reader) else { return };
                     let send_ok = if is_valid_websocket(&req) { 
                         upgrade_connection = true;
                         let resp = make_websocket_accept_response(&req);
-                        let Ok(resp) = resp.map_err(|err| println!("{}", err)) else { continue };
+                        let Ok(resp) = resp.map_err(|err| println!("{}", err)) else { return };
                         write_response(&mut writer, &resp)
                     } else {
                         let mut path = &req.path;
@@ -190,7 +204,13 @@ impl Server{
                     println!("Sent HTTP response to {peer_addr}");
                     if upgrade_connection { break };
                 }
-                defer! { println!("Closed WebSocket Connection {peer_addr}") };
+                defer! { 
+                    clients.write().unwrap().retain(|client| client.addr != peer_addr);
+                    println!("Closed WebSocket Connection {peer_addr}")
+                };
+                clients.write().unwrap().push(
+                    Client { writer: Arc::new(RwLock::new(writer)), addr: peer_addr }
+                );
                 println!("Got WebSocket Connection {}", peer_addr);
                 loop {
                     let Ok(buffer) = reader.fill_buf().map_err(|err| println!("{}", err)) else { return };
@@ -203,11 +223,12 @@ impl Server{
                     // ensure the bytes we worked with aren't returned again later
                     reader.consume(length);
 
-                    // Reply with static message
-                    let ws_message: [u8; 5] = [0x81, 0x03, b'h', b'e', b'j'];
-                    println!("Sending websocket message to {peer_addr}");
-                    let Ok(_) = writer.write_all(&ws_message).map_err(|err| println!("{}", err)) else { return };
-                    let Ok(_) = writer.flush().map_err(|err| println!("{}", err)) else { return };
+                    // // Reply with static "reload" message
+                    // let ws_message: [u8; 8] = [0x81, 0x06, b'r', b'e', b'l', b'o', b'a', b'd'];
+                    // println!("Sending websocket message to {peer_addr}");
+                    // let Ok(_) = writer.write_all(&ws_message).map_err(|err| println!("{}", err)) else { return };
+                    // let Ok(_) = writer.flush().map_err(|err| println!("{}", err)) else { return };
+                    // // break;
                 };
             });
         }
