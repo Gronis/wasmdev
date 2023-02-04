@@ -3,7 +3,8 @@ members = [
     "wasmdev",
     "wasmdev_macro",
     "wasmdev_server",
-    "examples/simple"
+    "examples/simple",
+    "examples/simple_leptos",
 ]
 
 [profile.release]
