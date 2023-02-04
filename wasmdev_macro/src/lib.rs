@@ -69,9 +69,9 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
             static index_html_path: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/", "index.html");
             static rust_src_path:   &str = concat!(env!("CARGO_MANIFEST_DIR"), "/", "src");
 
-            let server_config = Arc::new(RwLock::new(ServerConfig::new()));
+            let server = Server::new();
             {
-                let mut server_config = server_config.write().unwrap();
+                let mut server_config = server.config.write().unwrap();
                 server_config
                     .on_get_request("/")
                     .internal_redirect("/index.html")
@@ -83,27 +83,30 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
             }
 
             let build_load_and_serve_app = {
-                let mut server_config = server_config.clone();
+                let mut server = server.clone();
                 move || {
                     println!("\x1b[1m\x1b[92m    Building\x1b[0m wasm target");
                     let Some(_)         = build_wasm(wasm_path, #is_release)    else { return };
                     let Some(wasm_code) = load_file(Path::new(index_wasm_path)) else { return };
                     let Some(js_code)   = load_file(Path::new(index_js_path))   else { return };
                     println!("\x1b[1m\x1b[92m      Loaded\x1b[0m index.wasm, index.js");
-                    let mut server_config = server_config.write().unwrap();
-                    server_config
-                        .on_get_request("/index.wasm")
-                        .set_response_body(wasm_code)
-                        .build();
-                    server_config
-                        .on_get_request("/index.js")
-                        .set_response_body(js_code)
-                        .build();
+                    {
+                        let mut server_config = server.config.write().unwrap();
+                        server_config
+                            .on_get_request("/index.wasm")
+                            .set_response_body(wasm_code)
+                            .build();
+                        server_config
+                            .on_get_request("/index.js")
+                            .set_response_body(js_code)
+                            .build();
+                    }
+                    server.broadcast("reload /index.wasm".as_bytes());
                 }
             };
             
             let load_and_serve_file = {
-                let mut server_config = server_config.clone();
+                let mut server = server.clone();
                 move |file_path| {
                     let Some(file_contents) = load_file(file_path) else { return };
                     // server_config.write().unwrap()
@@ -114,13 +117,13 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
             };
             
             let load_and_serve_index_html = {
-                let mut server_config = server_config.clone();
+                let mut server = server.clone();
                 move || {
                     let Some(index_html) = load_file(Path::new(index_html_path)) else { return };
                     let index_html = from_utf8(&index_html).expect("index.html is not utf8 encoded.");
                     let index_html = format!("{}\n<script type=\"module\">{}</script>",index_html, #index_js); 
                     println!("\x1b[1m\x1b[92m      Loaded\x1b[0m index.html");
-                    server_config.write().unwrap()
+                    server.config.write().unwrap()
                         .on_get_request("/index.html")
                         .set_response_body(index_html.as_bytes().to_vec())
                         .build();
@@ -139,15 +142,15 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
             // TODO:
             // - find all files in "static" path and tell server those paths exists
             // - watch "static" path for changes
-            // - notify frontend of an update using websocket
             
-            let tcp_socket = TcpListener::bind("127.0.0.1:8123").expect("Unable to bind tcp port 8123");
-            let mut server = Server::new(tcp_socket, server_config);
-
             println!("\x1b[1m\x1b[92m            \x1b[0m ┏\x1b[0m━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m┓");
             println!("\x1b[1m\x1b[92m     Serving\x1b[0m ┃\x1b[1m http://127.0.0.1:8123 \x1b[0m┃ <- Click to open your app! ");
             println!("\x1b[1m\x1b[92m            \x1b[0m ┗\x1b[0m━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m┛");
-            server.listen().expect("Unable to handle incomming connection");
+            
+            let tcp_socket = TcpListener::bind("127.0.0.1:8123")
+                .expect("Unable to bind tcp port 8123");
+            server.listen(tcp_socket)
+                .expect("Unable to handle incomming connection");
         }
     }
 }
