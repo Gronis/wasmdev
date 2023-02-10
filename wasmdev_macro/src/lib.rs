@@ -45,7 +45,8 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
     let is_release   = !cfg!(debug_assertions);
     let release_mode = if is_release {"release"} else {"debug"};
 
-    let wasm_main_fn_ident = get_fn_name(wasm_main_fn).expect("Unable to get function name of main function");
+    let wasm_main_fn_ident = get_fn_name(wasm_main_fn)
+        .expect("Unable to get function name of main function");
 
     quote!{
         fn main() {
@@ -66,8 +67,8 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
             static wasm_path:       &str = concat!("target/wasm32-unknown-unknown", "/", #release_mode, "/", env!("CARGO_PKG_NAME"), ".wasm");
             static index_js_path:   &str = concat!("target/wasm32-unknown-unknown", "/", #release_mode, "/", env!("CARGO_PKG_NAME"), ".js");
             static index_wasm_path: &str = concat!("target/wasm32-unknown-unknown", "/", #release_mode, "/", env!("CARGO_PKG_NAME"), "_bg.wasm");
-            static index_html_path: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/", "index.html");
-            static rust_src_path:   &str = concat!(env!("CARGO_MANIFEST_DIR"), "/", "src");
+            static proj_html_path:  &str = concat!(env!("CARGO_MANIFEST_DIR"), "/", "index.html");
+            static proj_src_path:   &str = concat!(env!("CARGO_MANIFEST_DIR"), "/", "src");
 
             let server = Server::new();
             {
@@ -119,7 +120,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
             let load_and_serve_index_html = {
                 let mut server = server.clone();
                 move || {
-                    let Some(index_html) = load_file(Path::new(index_html_path)) else { return };
+                    let Some(index_html) = load_file(Path::new(proj_html_path)) else { return };
                     let index_html = from_utf8(&index_html).expect("index.html is not utf8 encoded.");
                     let index_html = format!("{}\n<script type=\"module\">{}</script>",index_html, #index_js); 
                     println!("\x1b[1m\x1b[92m      Loaded\x1b[0m index.html");
@@ -132,12 +133,12 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
 
             // Watcher on src-code required.
             build_load_and_serve_app();
-            let _watcher_index_wasm = make_watcher(Path::new(rust_src_path), move |_| build_load_and_serve_app())
+            let _watcher_index_wasm = make_watcher(Path::new(proj_src_path), move |_| build_load_and_serve_app())
                 .expect("Unable to watch src folder, required for hot-reload.");
 
             // Providing a custom index.html is optional, so open watcher is allowed to fail silently here.
             load_and_serve_index_html();
-            let _watcher_index_html = make_watcher(Path::new(index_html_path), move |_| load_and_serve_index_html());
+            let _watcher_index_html = make_watcher(Path::new(proj_html_path), move |_| load_and_serve_index_html());
             
             // TODO:
             // - find all files in "static" path and tell server those paths exists

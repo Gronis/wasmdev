@@ -23,17 +23,17 @@ pub fn build_wasm(input_path: &str, is_release: bool) -> Option<()> {
     };
     let sh = Shell::new().expect("Unable to create shell");
     cmd!(sh, "cargo build").args(args).quiet().run().ok()?;
-    let mut b = Bindgen::new();
-    b.input_path(input_path)
+    let mut bind = Bindgen::new();
+    bind.input_path(input_path)
         .web(true)
         .map_err(|err| println!("{}", err)).ok()?
-        .demangle(true)
+        .demangle(is_release)
         .debug(!is_release)
         .remove_name_section(is_release)
         .remove_producers_section(is_release);
 
     let output_path = Path::new(input_path).parent().expect("No parent when building wasm");
-    b.generate(output_path).map_err(|err| println!("{}", err)).ok()
+    bind.generate(output_path).map_err(|err| println!("{}", err)).ok()
 }
 
 pub fn make_watcher(path: &Path, mut event_handler: impl EventHandler) -> Option<impl Watcher> {
