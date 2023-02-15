@@ -2,12 +2,19 @@ use proc_macro::TokenStream;
 use proc_macro2::{TokenStream as TokenStream2, TokenTree};
 use quote::quote;
 
+#[derive(Debug, Default)]
+struct Config {
+    port: u16,
+    path: Option<String>,
+}
+
 #[proc_macro_attribute]
-pub fn main(_attr: TokenStream, main_fn: TokenStream) -> TokenStream {
+pub fn main(attrs: TokenStream, main_fn: TokenStream) -> TokenStream {
 
     let wasm_fn: TokenStream2 = main_fn.into();
-    let wasm_main_fn   = make_wasm_main_fn(&wasm_fn);
-    let server_main_fn = make_server_main_fn(&wasm_fn);
+    let config                = parse_config_attrs(attrs.into());
+    let wasm_main_fn          = make_wasm_main_fn(&wasm_fn);
+    let server_main_fn        = make_server_main_fn(&wasm_fn, config);
 
     quote! {
         #[cfg(not(target_family = "wasm"))]
@@ -15,6 +22,48 @@ pub fn main(_attr: TokenStream, main_fn: TokenStream) -> TokenStream {
         #[cfg(target_family = "wasm")]
         #wasm_main_fn
     }.into()
+}
+
+fn parse_config_attrs(attrs: TokenStream2) -> Config {
+    let mut it = attrs.into_iter();
+    let mut port: u16 = 8080;
+    let mut path = None;
+
+    loop {
+        let Some(TokenTree::Ident(ident)) = it.next() else { break };
+        let Some(TokenTree::Punct(punct)) = it.next() else { panic!("Incomplete attribute list, expected '=' or ':' after '{ident}'") };
+        let Some(TokenTree::Literal(value)) = it.next() else { panic!("Incomplete attribute list, expected value after '{punct}'") };
+
+        match punct.to_string().as_str() {
+            ":" => (),
+            "=" => (),
+            _ => panic!("Must use ':' or '=' to assign a value to '{ident}'"),
+        };
+
+        match ident.to_string().as_str() {
+            "port" => { 
+                let Some(p) = value.to_string().parse().ok() else { 
+                    panic!("Unable to parse port, {value} is not a u16")
+                };
+                port = p;
+            },
+            "path" => {
+                let value = value.to_string();
+                if value.as_bytes()[0] != ('"' as u8) || value.as_bytes()[value.as_bytes().len() - 1] != ('"' as u8) { 
+                    panic!("Unable to set path, {value} is not a &str literal")
+                }
+                path = Some(value[1..value.len() - 1].to_string())
+            },
+            ident  => panic!("Unknown attribute: {ident}, Tip: possible attributes in {:?}", Config::default()),
+        }
+
+        match it.next() {
+            Some(TokenTree::Punct(punct)) if punct.to_string() == "," => (),
+            None => (),
+            Some(tt) => panic!("Unrecognised character '{tt}', Tip: use ',' to separate attributes."),
+        }
+    };
+    Config { port, path }
 }
 
 fn get_fn_name(func: &TokenStream2) -> Option<TokenTree> {
@@ -38,7 +87,7 @@ fn make_wasm_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
     }
 }
 
-fn make_server_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
+fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStream2 {
     let index_js     = include_str!("index.js");
     let index_html   = include_str!("index.html");
     let index_html   = format!("{index_html}\n<script type=\"module\">{index_js}</script>"); 
@@ -48,12 +97,14 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
     let wasm_main_fn_ident = get_fn_name(wasm_main_fn)
         .expect("Unable to get function name of main function");
 
+    let server_port = config.port;
+    let server_path = config.path.unwrap_or(".".to_string());
+
     quote!{
         fn main() {
             use std::net::TcpListener;
             use std::path::Path;
             use std::str::from_utf8;
-            use std::sync::{Arc,RwLock};
             use wasmdev::prelude::*;
             use wasmdev::{Server, ServerConfig};
             use wasmdev::utils::{build_wasm, load_file, make_watcher};
@@ -63,12 +114,14 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
             // Make a call to it that never executes to avoid compiler warnings:
             if false { #wasm_main_fn_ident () }
 
-            // TODO: make path to static files configurable, including index.html:
             static wasm_path:       &str = concat!("target/wasm32-unknown-unknown", "/", #release_mode, "/", env!("CARGO_PKG_NAME"), ".wasm");
             static index_js_path:   &str = concat!("target/wasm32-unknown-unknown", "/", #release_mode, "/", env!("CARGO_PKG_NAME"), ".js");
             static index_wasm_path: &str = concat!("target/wasm32-unknown-unknown", "/", #release_mode, "/", env!("CARGO_PKG_NAME"), "_bg.wasm");
-            static proj_html_path:  &str = concat!(env!("CARGO_MANIFEST_DIR"), "/", "index.html");
-            static proj_src_path:   &str = concat!(env!("CARGO_MANIFEST_DIR"), "/", "src");
+            static proj_html_path:  &str = concat!(env!("CARGO_MANIFEST_DIR"),      "/", #server_path, "/", "index.html");
+            static proj_src_path:   &str = concat!(env!("CARGO_MANIFEST_DIR"),      "/", "src");
+
+            let server_port = #server_port;
+            let server_path = #server_path;
 
             let server = Server::new();
             {
@@ -121,8 +174,8 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
                 let mut server = server.clone();
                 move || {
                     let Some(index_html) = load_file(Path::new(proj_html_path)) else { return };
-                    let index_html = from_utf8(&index_html).expect("index.html is not utf8 encoded.");
-                    let index_html = format!("{}\n<script type=\"module\">{}</script>",index_html, #index_js); 
+                    let index_html       = from_utf8(&index_html).expect("index.html is not utf8 encoded.");
+                    let index_html       = format!("{}\n<script type=\"module\">{}</script>",index_html, #index_js); 
                     println!("\x1b[1m\x1b[92m      Loaded\x1b[0m index.html");
                     server.config.write().unwrap()
                         .on_get_request("/index.html")
@@ -144,14 +197,17 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
             // - find all files in "static" path and tell server those paths exists
             // - watch "static" path for changes
             
-            println!("\x1b[1m\x1b[92m            \x1b[0m ┏\x1b[0m━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m┓");
-            println!("\x1b[1m\x1b[92m     Serving\x1b[0m ┃\x1b[1m http://127.0.0.1:8123 \x1b[0m┃ <- Click to open your app! ");
-            println!("\x1b[1m\x1b[92m            \x1b[0m ┗\x1b[0m━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m┛");
+            println!("\x1b[1m\x1b[92m            \x1b[0m ┏\x1b[0m━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m┓");
+            println!("\x1b[1m\x1b[92m     Serving\x1b[0m ┃\x1b[1m http://127.0.0.1:{   } \x1b[0m┃ <- Click to open your app! ", format!("{: <5}", server_port));
+            println!("\x1b[1m\x1b[92m            \x1b[0m ┗\x1b[0m━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m┛");
             
-            let tcp_socket = TcpListener::bind("127.0.0.1:8123")
-                .expect("Unable to bind tcp port 8123");
-            server.listen(tcp_socket)
-                .expect("Unable to handle incomming connection");
+            let addr = format!("127.0.0.1:{}", server_port);
+            let Some(tcp_socket) = TcpListener::bind(addr).ok() else { 
+                panic!("Unable to bind tcp port: {}", server_port)
+            };
+            let Some(()) = server.listen(tcp_socket).ok() else { 
+                panic!("Unable to handle incomming connection")
+            };
         }
     }
 }
