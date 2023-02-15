@@ -1,8 +1,11 @@
 use std::fs::File;
 use std::io::prelude::*;
-use std::path::Path;
-use notify::{recommended_watcher, Watcher, RecursiveMode, Result, EventHandler};
-use notify::event::{Event, EventKind, ModifyKind};
+use std::path::{Path, PathBuf};
+use notify::{recommended_watcher, Watcher, RecursiveMode};
+use notify::event::{EventKind, ModifyKind};
+
+pub use notify::event::Event;
+pub use notify::{Result, EventHandler};
 
 pub fn load_file(file_path: &Path) -> Option<Vec<u8>> {
     let mut file_handle = File::open(file_path).ok()?;
@@ -46,6 +49,35 @@ pub fn make_watcher(path: &Path, mut event_handler: impl EventHandler) -> Option
     }).expect("Unable to initiate watcher");
     watcher.watch(path, RecursiveMode::Recursive).ok()?;
     Some(watcher)
+}
+
+pub fn find_files(path: &Path) -> Vec<PathBuf> {
+    let mut files = vec![];
+    let mut paths = vec![path.to_path_buf()];
+    use std::io;
+    use std::fs::{self};
+    let mut traverse = |paths_in: &mut Vec<PathBuf>| -> io::Result<Vec<PathBuf>> {
+        let mut paths_out = vec![];
+        for path in paths_in.drain(..) {
+            for entry in fs::read_dir(path)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.is_dir() {
+                    paths_out.push(path);
+                } else {
+                    files.push(path);
+                }
+            }
+        }
+        Ok(paths_out)
+    };
+
+    // Recurse 3 layers down
+    let Ok(mut paths) = traverse(&mut paths) else { return vec![] };
+    let Ok(mut paths) = traverse(&mut paths) else { return vec![] };
+    let Ok(_)         = traverse(&mut paths) else { return vec![] };
+
+    files
 }
 
 // TODO; Put somewhere else.

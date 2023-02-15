@@ -103,25 +103,25 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
     quote!{
         fn main() {
             use std::net::TcpListener;
-            use std::path::Path;
+            use std::path::{Path, PathBuf};
             use std::str::from_utf8;
             use wasmdev::prelude::*;
             use wasmdev::{Server, ServerConfig};
-            use wasmdev::utils::{build_wasm, load_file, make_watcher};
+            use wasmdev::utils::{build_wasm, load_file, make_watcher, find_files, Result, Event};
 
             // Make sure rust analyzer analyze the wasm code for better code-completion experience:
             #wasm_main_fn
             // Make a call to it that never executes to avoid compiler warnings:
             if false { #wasm_main_fn_ident () }
 
-            static wasm_path:       &str = concat!("target/wasm32-unknown-unknown", "/", #release_mode, "/", env!("CARGO_PKG_NAME"), ".wasm");
-            static index_js_path:   &str = concat!("target/wasm32-unknown-unknown", "/", #release_mode, "/", env!("CARGO_PKG_NAME"), ".js");
-            static index_wasm_path: &str = concat!("target/wasm32-unknown-unknown", "/", #release_mode, "/", env!("CARGO_PKG_NAME"), "_bg.wasm");
-            static proj_html_path:  &str = concat!(env!("CARGO_MANIFEST_DIR"),      "/", #server_path, "/", "index.html");
-            static proj_src_path:   &str = concat!(env!("CARGO_MANIFEST_DIR"),      "/", "src");
+            static wasm_path:        &str = concat!("target/wasm32-unknown-unknown", "/", #release_mode, "/", env!("CARGO_PKG_NAME"), ".wasm");
+            static index_js_path:    &str = concat!("target/wasm32-unknown-unknown", "/", #release_mode, "/", env!("CARGO_PKG_NAME"), ".js");
+            static index_wasm_path:  &str = concat!("target/wasm32-unknown-unknown", "/", #release_mode, "/", env!("CARGO_PKG_NAME"), "_bg.wasm");
+            static proj_html_path:   &str = concat!(env!("CARGO_MANIFEST_DIR"),      "/", #server_path,  "/", "index.html");
+            static proj_server_path: &str = concat!(env!("CARGO_MANIFEST_DIR"),      "/", #server_path);
+            static proj_src_path:    &str = concat!(env!("CARGO_MANIFEST_DIR"),      "/", "src");
 
             let server_port = #server_port;
-            let server_path = #server_path;
 
             let server = Server::new();
             {
@@ -143,30 +143,40 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
                     let Some(_)         = build_wasm(wasm_path, #is_release)    else { return };
                     let Some(wasm_code) = load_file(Path::new(index_wasm_path)) else { return };
                     let Some(js_code)   = load_file(Path::new(index_js_path))   else { return };
-                    println!("\x1b[1m\x1b[92m      Loaded\x1b[0m index.wasm, index.js");
-                    {
+                    let code_did_update = {
                         let mut server_config = server.config.write().unwrap();
-                        server_config
-                            .on_get_request("/index.wasm")
-                            .set_response_body(wasm_code)
-                            .build();
                         server_config
                             .on_get_request("/index.js")
                             .set_response_body(js_code)
                             .build();
+                        server_config
+                            .on_get_request("/index.wasm")
+                            .set_response_body(wasm_code)
+                            .build()
+                    };
+                    if code_did_update {
+                        println!("\x1b[1m\x1b[92m      Loaded\x1b[0m /index.wasm, /index.js");
+                        server.broadcast("reload /index.wasm".as_bytes());
                     }
-                    server.broadcast("reload /index.wasm".as_bytes());
                 }
             };
             
             let load_and_serve_file = {
                 let mut server = server.clone();
-                move |file_path| {
-                    let Some(file_contents) = load_file(file_path) else { return };
-                    // server_config.write().unwrap()
-                    //     .on_get_request(Path::new("/").join(file_path).as_str())
-                    //     .set_response_body(&file_contents)
-                    //     .build();
+                move |event: Result<Event> | {
+                    let Some(event) = event.ok() else { return };
+                    for file_path in event.paths {
+                        let file_path = file_path.as_path();
+                        let Some(req_path) = file_path.to_str().map(|path| path.replace(proj_server_path, "")) else { continue };
+                        if req_path == "/index.html" { continue }; // index.html is handled in another watcher, so skip it.
+                        let Some(file_contents) = load_file(file_path) else { continue };
+                        println!("\x1b[1m\x1b[92m      Loaded\x1b[0m {}", req_path);
+                        server.config.write().unwrap()
+                            .on_get_request(&req_path)
+                            .set_response_body(file_contents)
+                            .build();
+                        // TODO: broadcast "reload {req_path}" to tell clients that file did update.
+                    }
                 }
             };
             
@@ -176,7 +186,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
                     let Some(index_html) = load_file(Path::new(proj_html_path)) else { return };
                     let index_html       = from_utf8(&index_html).expect("index.html is not utf8 encoded.");
                     let index_html       = format!("{}\n<script type=\"module\">{}</script>",index_html, #index_js); 
-                    println!("\x1b[1m\x1b[92m      Loaded\x1b[0m index.html");
+                    println!("\x1b[1m\x1b[92m      Loaded\x1b[0m /index.html");
                     server.config.write().unwrap()
                         .on_get_request("/index.html")
                         .set_response_body(index_html.as_bytes().to_vec())
@@ -184,21 +194,35 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
                 }
             };
 
-            // Watcher on src-code required.
+            let serve_static_files = || {
+                {
+                    let file_paths = find_files(Path::new(proj_server_path));
+                    let mut conf = server.config.write().unwrap();
+                    for file_path in file_paths{
+                        let Some(file_path) = file_path.to_str() else { continue };
+                        let path = file_path.replace(proj_server_path, "");
+                        conf.on_get_request(&path)
+                            .lazy_load(file_path)
+                            .build();
+                    }
+                }
+                println!("\x1b[1m\x1b[92m      Loaded\x1b[0m /{}", #server_path);
+            };
+
             build_load_and_serve_app();
             let _watcher_index_wasm = make_watcher(Path::new(proj_src_path), move |_| build_load_and_serve_app())
                 .expect("Unable to watch src folder, required for hot-reload.");
 
+            serve_static_files();
+            let _watcher_server_path = make_watcher(Path::new(proj_server_path), load_and_serve_file)
+                .expect("Unable to watch static files folder, required for hot-reload when updated.");
+            
             // Providing a custom index.html is optional, so open watcher is allowed to fail silently here.
             load_and_serve_index_html();
             let _watcher_index_html = make_watcher(Path::new(proj_html_path), move |_| load_and_serve_index_html());
             
-            // TODO:
-            // - find all files in "static" path and tell server those paths exists
-            // - watch "static" path for changes
-            
             println!("\x1b[1m\x1b[92m            \x1b[0m ┏\x1b[0m━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m┓");
-            println!("\x1b[1m\x1b[92m     Serving\x1b[0m ┃\x1b[1m http://127.0.0.1:{   } \x1b[0m┃ <- Click to open your app! ", format!("{: <5}", server_port));
+            println!("\x1b[1m\x1b[92m     Serving\x1b[0m ┃\x1b[1m http://127.0.0.1:{   } \x1b[0m┃ <= Click to open your app! ", format!("{: <5}", server_port));
             println!("\x1b[1m\x1b[92m            \x1b[0m ┗\x1b[0m━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m┛");
             
             let addr = format!("127.0.0.1:{}", server_port);
