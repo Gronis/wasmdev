@@ -160,6 +160,21 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
                     }
                 }
             };
+
+            let serve_static_files = || {
+                {
+                    let file_paths = find_files(Path::new(proj_server_path));
+                    let mut conf = server.config.write().unwrap();
+                    for file_path in file_paths{
+                        let Some(file_path) = file_path.to_str() else { continue };
+                        let path = file_path.replace(proj_server_path, "");
+                        conf.on_get_request(&path)
+                            .lazy_load(file_path)
+                            .build();
+                    }
+                }
+                println!("\x1b[1m\x1b[92m     Mapping\x1b[0m / => {}/", #server_path);
+            };
             
             let load_and_serve_file = {
                 let mut server = server.clone();
@@ -192,21 +207,6 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
                         .set_response_body(index_html.as_bytes().to_vec())
                         .build();
                 }
-            };
-
-            let serve_static_files = || {
-                {
-                    let file_paths = find_files(Path::new(proj_server_path));
-                    let mut conf = server.config.write().unwrap();
-                    for file_path in file_paths{
-                        let Some(file_path) = file_path.to_str() else { continue };
-                        let path = file_path.replace(proj_server_path, "");
-                        conf.on_get_request(&path)
-                            .lazy_load(file_path)
-                            .build();
-                    }
-                }
-                println!("\x1b[1m\x1b[92m      Loaded\x1b[0m /{}", #server_path);
             };
 
             build_load_and_serve_app();
