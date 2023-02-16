@@ -22,7 +22,8 @@ pub struct EndpointHasResponse {}
 pub trait EndpointBuilderHasResponse {
     /// Build the endpoint. Returns true if endpoint body did change.
     fn build(self) -> bool;
-    fn add_response_header(&mut self, header: Header) -> &mut Self;
+    fn add_response_header(self, header: Header) -> Self;
+    fn add_response_headers(self, headers: Vec<Header>) -> Self;
 }
 
 pub struct EndpointNoResponse {}
@@ -63,20 +64,23 @@ impl <'a, T> EndpointBuilderHasResponse for EndpointBuilder<'a, T> {
         if !endpoint.headers.iter().any(|h| matches!(h, Header::ContentType(_))) {
             let mime_type = match Path::new(self.path).extension() {
                 Some(s) if s == "wasm" => Some("application/wasm"),
-                Some(s) if s == "html" => Some("text/html"),
                 Some(s) if s == "js"   => Some("application/javascript"),
+                Some(s) if s == "html" => Some("text/html"),
+                Some(s) if s == "css"  => Some("text/css"),
                 _                      => None,
+                // TODO: Add more mime types in a compact way
             };
             if let Some(mime_type) = mime_type {
                 endpoint.headers.push(Header::ContentType(mime_type.into()));
             }
         };
         if !endpoint.headers.iter().any(|h| matches!(h, Header::ContentLength(_))) {
-            let size = match &endpoint.response_action {
-                Some(ResponseAction::Content(body)) => body.len(),
-                _ => 0,
-            };
-            endpoint.headers.push(Header::ContentLength(size));
+            if let Some(size) = match &endpoint.response_action {
+                Some(ResponseAction::Content(body)) => Some(body.len()),
+                _ => None,
+            } {
+                endpoint.headers.push(Header::ContentLength(size));
+            }
         }
         let endpoint_hash = match &endpoint.response_action {
             Some(ResponseAction::Content(body)) => Some(simple_hash(&body)),
@@ -93,9 +97,23 @@ impl <'a, T> EndpointBuilderHasResponse for EndpointBuilder<'a, T> {
         old_endpoint_hash != endpoint_hash
     }
     #[inline]
-    fn add_response_header(&mut self, header: Header) -> &mut Self {
-        self.endpoint.headers.push(header);
-        self
+    fn add_response_header(self, header: Header) -> Self {
+        self.add_response_headers(vec![header])
+    }
+    #[inline]
+    fn add_response_headers(self, mut headers: Vec<Header>) -> Self {
+        for header in self.endpoint.headers {
+            headers.push(header);
+        }
+        Self {
+            endpoint: Endpoint { 
+                headers: headers, 
+                response_action: self.endpoint.response_action 
+            },
+            path: self.path,
+            server_config: self.server_config,
+            _marker: self._marker,
+        }
     }
 }
 
@@ -219,11 +237,13 @@ impl Server{
                             let Some(response_action) = &endpoint.response_action else { break None };
                             match response_action {
                                 ResponseAction::InternalRedirect(redirect_path) => { path = &redirect_path; },
-                                ResponseAction::LazyLoad(path) => {
-                                    let Some(body) = load_file(Path::new(path)) else { break None };
-                                    lazy_response = Some((path.clone(), ResponseAction::Content(body)));
-                                    let Some((_, content)) = &lazy_response else { break None };
-                                    break Some((&endpoint.headers, content));
+                                ResponseAction::LazyLoad(file_path) => {
+                                    let Some(body) = load_file(Path::new(file_path)) else { break None };
+                                    let mut headers = endpoint.headers.clone();
+                                    headers.push(Header::ContentLength(body.len()));
+                                    lazy_response = Some((path.clone(), headers, ResponseAction::Content(body)));
+                                    let Some((_, headers, response_action)) = &lazy_response else { break None };
+                                    break Some((headers, response_action));
                                 },
                                 _ => {
                                     break Some((&endpoint.headers, response_action));
@@ -244,9 +264,10 @@ impl Server{
                     };
                     let Ok(_) = send_ok.map_err(|err| println!("{}", err)) else { continue };
                     println!("Sent HTTP response to {peer_addr}");
-                    if let Some((path, ResponseAction::Content(body))) = lazy_response {
+                    if let Some((path, headers, ResponseAction::Content(body))) = lazy_response {
                         config.write().unwrap()
                             .on_get_request(&path)
+                            .add_response_headers(headers)
                             .set_response_body(body)
                             .build();
                     }

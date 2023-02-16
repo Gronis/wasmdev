@@ -98,7 +98,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
         .expect("Unable to get function name of main function");
 
     let server_port = config.port;
-    let server_path = config.path.unwrap_or(".".to_string());
+    let server_path = config.path.unwrap_or("src".to_string());
 
     quote!{
         fn main() {
