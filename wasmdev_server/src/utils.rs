@@ -1,11 +1,11 @@
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
-use notify::{recommended_watcher, Watcher, RecursiveMode};
-use notify::event::{EventKind, ModifyKind};
 
+#[cfg(not(target_family = "wasm"))]
 pub use notify::event::Event;
-pub use notify::{Result, EventHandler};
+#[cfg(not(target_family = "wasm"))]
+pub use notify::{Result, Watcher, EventHandler};
 
 pub fn load_file(file_path: &Path) -> Option<Vec<u8>> {
     let mut file_handle = File::open(file_path).ok()?;
@@ -47,7 +47,11 @@ pub fn minify_javascript(code_in: &[u8]) -> Vec<u8>{
     code_out
 } 
 
+#[cfg(not(target_family = "wasm"))]
 pub fn make_watcher(path: &Path, mut event_handler: impl EventHandler) -> Option<impl Watcher> {
+    use notify::{recommended_watcher, RecursiveMode};
+    use notify::event::{EventKind, ModifyKind};
+
     let mut watcher = recommended_watcher(move |e: Result<Event>| -> () {
         let Ok(event)                 = &e           else { return };
         let EventKind::Modify(modify) = &event.kind  else { return };
@@ -88,7 +92,6 @@ pub fn find_files(path: &Path) -> Vec<PathBuf> {
     files
 }
 
-// TODO; Put somewhere else.
 pub struct Deferred <T: Fn() -> ()>{
     pub f: T,
 }

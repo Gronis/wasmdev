@@ -81,7 +81,7 @@ fn make_wasm_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
     quote! {
         fn main() {
             #wasm_main_fn
-            wasmdev::console_error_panic_hook::set_once();
+            wasmdev::if_enabled_setup_panic_hook_once();
             #wasm_main_fn_ident ();
         }
     }

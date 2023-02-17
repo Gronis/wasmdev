@@ -7,7 +7,11 @@ edition = "2021"
 wasmdev_macro = { workspace = true}
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-console_error_panic_hook = "0.1.7"
+console_error_panic_hook = { version = "0.1.7", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 wasmdev_server = { workspace = true}
+
+[features]
+default = ["panic_hook"]
+panic_hook = ["dep:console_error_panic_hook"]

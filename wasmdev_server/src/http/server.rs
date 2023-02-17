@@ -58,7 +58,6 @@ fn simple_hash(bin: &Vec<u8>) -> u32 {
 }
 
 impl <'a, T> EndpointBuilderHasResponse for EndpointBuilder<'a, T> {
-    #[inline]
     fn build(self) -> bool {
         let mut endpoint = self.endpoint;
         if !endpoint.headers.iter().any(|h| matches!(h, Header::ContentType(_))) {
@@ -100,7 +99,6 @@ impl <'a, T> EndpointBuilderHasResponse for EndpointBuilder<'a, T> {
     fn add_response_header(self, header: Header) -> Self {
         self.add_response_headers(vec![header])
     }
-    #[inline]
     fn add_response_headers(self, mut headers: Vec<Header>) -> Self {
         for header in self.endpoint.headers {
             headers.push(header);
@@ -118,7 +116,6 @@ impl <'a, T> EndpointBuilderHasResponse for EndpointBuilder<'a, T> {
 }
 
 impl <'a> EndpointBuilderNoResponse<'a> for EndpointBuilder<'a, EndpointNoResponse> {
-    #[inline]
     fn internal_redirect(self, path: &'a str) -> EndpointBuilder<'a, EndpointHasResponse> {
         EndpointBuilder { 
             server_config: self.server_config, 
@@ -130,7 +127,6 @@ impl <'a> EndpointBuilderNoResponse<'a> for EndpointBuilder<'a, EndpointNoRespon
             _marker: Default::default()
         }
     }
-    #[inline]
     fn set_response_body(self, body: Vec<u8>) -> EndpointBuilder<'a, EndpointHasResponse> {
         EndpointBuilder { 
             server_config: self.server_config,
@@ -142,7 +138,6 @@ impl <'a> EndpointBuilderNoResponse<'a> for EndpointBuilder<'a, EndpointNoRespon
             _marker: Default::default()
         }
     }
-    #[inline]
     fn lazy_load(self, path: &'a str) -> EndpointBuilder<'a, EndpointHasResponse> {
         EndpointBuilder { 
             server_config: self.server_config,
