@@ -83,14 +83,14 @@ impl <'a, T> EndpointBuilderHasResponse for EndpointBuilder<'a, T> {
             }
         }
         let endpoint_hash = match &endpoint.response_action {
-            Some(ResponseAction::Content(body)) => Some(simple_hash(&body)),
+            Some(ResponseAction::Content(body)) => Some(simple_hash(body)),
             _ => None,
         };
-        let Some(old_endpoint) = self.server_config.endpoints.insert(self.path.to_string(), endpoint) else { 
-            return false;
+        let Some(old_endpoint) = self.server_config.endpoints.insert(self.path.into(), endpoint) else {
+            return true;
         };
-        let old_endpoint_hash = match old_endpoint.response_action {
-            Some(ResponseAction::Content(body)) => Some(simple_hash(&body)),
+        let old_endpoint_hash = match &old_endpoint.response_action {
+            Some(ResponseAction::Content(body)) => Some(simple_hash(body)),
             _ => None,
         };
         // Does not check headers, only response body. Might need to change in the future.

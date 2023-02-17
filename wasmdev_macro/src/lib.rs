@@ -225,9 +225,9 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
                     // Providing a custom index.html is optional, so open watcher is allowed to fail silently here.
             ))};
             
-            println!("\x1b[1m\x1b[92m            \x1b[0m ┏\x1b[0m━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m┓");
-            println!("\x1b[1m\x1b[92m     Serving\x1b[0m ┃\x1b[1m http://127.0.0.1:{   } \x1b[0m┃ <= Click to open your app! ", format!("{: <5}", server_port));
-            println!("\x1b[1m\x1b[92m            \x1b[0m ┗\x1b[0m━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m┛");
+            println!("\x1b[1m\x1b[92m            \x1b[0m ┏\x1b[0m━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m┓");
+            println!("\x1b[1m\x1b[92m     Serving\x1b[0m ┃\x1b[1m  http://127.0.0.1:{   } \x1b[0m┃ <= Click to open your app! ", format!("{: <5}", server_port));
+            println!("\x1b[1m\x1b[92m            \x1b[0m ┗\x1b[0m━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m┛");
             
             let addr = format!("127.0.0.1:{}", server_port);
             let Some(tcp_socket) = TcpListener::bind(addr).ok() else { 
