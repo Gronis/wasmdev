@@ -211,17 +211,19 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
                 }
             };
 
-            build_load_and_serve_app();
-            let _watcher_index_wasm = make_watcher(Path::new(proj_src_path), move |_| build_load_and_serve_app())
-                .expect("Unable to watch src folder, required for hot-reload.");
-
+            // Load server resources:
             serve_static_files();
-            let _watcher_server_path = make_watcher(Path::new(proj_server_path), load_and_serve_file)
-                .expect("Unable to watch static files folder, required for hot-reload when updated.");
-            
-            // Providing a custom index.html is optional, so open watcher is allowed to fail silently here.
             load_and_serve_index_html();
-            let _watcher_index_html = make_watcher(Path::new(proj_html_path), move |_| load_and_serve_index_html());
+            build_load_and_serve_app();
+
+            let _watchers = if #is_release {None} else {Some((
+                make_watcher(Path::new(proj_server_path), load_and_serve_file)
+                    .expect("Unable to watch static files folder, required for hot-reload when updated."),
+                make_watcher(Path::new(proj_src_path), move |_| build_load_and_serve_app())
+                    .expect("Unable to watch src folder, required for hot-reload."),
+                make_watcher(Path::new(proj_html_path), move |_| load_and_serve_index_html()),
+                    // Providing a custom index.html is optional, so open watcher is allowed to fail silently here.
+            ))};
             
             println!("\x1b[1m\x1b[92m            \x1b[0m ┏\x1b[0m━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m┓");
             println!("\x1b[1m\x1b[92m     Serving\x1b[0m ┃\x1b[1m http://127.0.0.1:{   } \x1b[0m┃ <= Click to open your app! ", format!("{: <5}", server_port));
