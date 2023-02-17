@@ -1,8 +1,7 @@
 
 import init from '/index.js';
-window.init = init;
 init("/index.wasm");
-
+// -- debug -- \\
 var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 var url = protocol + "//" + window.location.host;
 

@@ -90,9 +90,10 @@ fn make_wasm_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
 fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStream2 {
     let index_js     = include_str!("index.js");
     let index_html   = include_str!("index.html");
-    let index_html   = format!("{index_html}\n<script type=\"module\">{index_js}</script>"); 
     let is_release   = !cfg!(debug_assertions);
     let release_mode = if is_release {"release"} else {"debug"};
+    let index_js     = if is_release {index_js.split("// -- debug --").next().unwrap()} else {index_js};
+    let index_html   = format!("{index_html}\n<script type=\"module\">{index_js}</script>"); 
 
     let wasm_main_fn_ident = get_fn_name(wasm_main_fn)
         .expect("Unable to get function name of main function");
@@ -107,7 +108,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
             use std::str::from_utf8;
             use wasmdev::prelude::*;
             use wasmdev::{Server, ServerConfig};
-            use wasmdev::utils::{build_wasm, load_file, make_watcher, find_files, Result, Event};
+            use wasmdev::utils::{build_wasm, load_file, minify_javascript, make_watcher, find_files, Result, Event};
 
             // Make sure rust analyzer analyze the wasm code for better code-completion experience:
             #wasm_main_fn
@@ -143,6 +144,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
                     let Some(_)         = build_wasm(wasm_path, #is_release)    else { return };
                     let Some(wasm_code) = load_file(Path::new(index_wasm_path)) else { return };
                     let Some(js_code)   = load_file(Path::new(index_js_path))   else { return };
+                    let      js_code    = if !#is_release { js_code }           else { minify_javascript(&js_code) };
                     let code_did_update = {
                         let mut server_config = server.config.write().unwrap();
                         server_config

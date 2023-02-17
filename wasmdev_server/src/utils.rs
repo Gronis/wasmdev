@@ -26,18 +26,26 @@ pub fn build_wasm(input_path: &str, is_release: bool) -> Option<()> {
     };
     let sh = Shell::new().expect("Unable to create shell");
     cmd!(sh, "cargo build").args(args).quiet().run().ok()?;
-    let mut bind = Bindgen::new();
-    bind.input_path(input_path)
+    let output_path = Path::new(input_path).parent().expect("No parent when building wasm");
+    Bindgen::new()
+        .input_path(input_path)
         .web(true)
         .map_err(|err| println!("{}", err)).ok()?
-        .demangle(is_release)
+        .demangle(!is_release)
         .debug(!is_release)
         .remove_name_section(is_release)
-        .remove_producers_section(is_release);
-
-    let output_path = Path::new(input_path).parent().expect("No parent when building wasm");
-    bind.generate(output_path).map_err(|err| println!("{}", err)).ok()
+        .remove_producers_section(is_release)
+        .generate(output_path).map_err(|err| println!("{}", err)).ok()
 }
+
+#[cfg(not(target_family = "wasm"))]
+pub fn minify_javascript(code_in: &[u8]) -> Vec<u8>{
+    use minify_js::{Session, TopLevelMode, minify};
+    let session = Session::new();
+    let mut code_out = vec![];
+    minify(&session, TopLevelMode::Module, code_in, &mut code_out).unwrap();
+    code_out
+} 
 
 pub fn make_watcher(path: &Path, mut event_handler: impl EventHandler) -> Option<impl Watcher> {
     let mut watcher = recommended_watcher(move |e: Result<Event>| -> () {
