@@ -192,7 +192,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
                             .on_get_request(&req_path)
                             .set_response_body(file_contents)
                             .build();
-                        // TODO: broadcast "reload {req_path}" to tell clients that file did update.
+                        server.broadcast(format!("reload {}", req_path).as_bytes());
                     }
                 }
             };
