@@ -1,3 +1,9 @@
 body {
     font-family: Arial, Helvetica, sans-serif;
-};
+}
+button {
+    width: 100%;
+}
+div {
+    text-align: center;
+}

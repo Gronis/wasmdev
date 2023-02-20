@@ -6,11 +6,13 @@ pub fn Counter(cx: Scope, initial_value: i32) -> impl IntoView {
     let decrement = move |_| set_value.update(|value| *value -= 1);
     let increment = move |_| set_value.update(|value| *value += 1);
     view! { cx,
-        <div>
-            <button on:click=decrement>"-1"</button>
-            <span>"  Value: " {move || value.get().to_string()} "  "</span>
-            <button on:click=increment>"+1"</button>
-        </div>
+        <table>
+            <td>
+                <tr><button on:click=decrement>"-"</button></tr>
+                <tr><div>{move || value.get().to_string()}</div></tr>
+                <tr><button on:click=increment>"+"</button></tr>
+            </td>
+        </table>
     }
 }
 
