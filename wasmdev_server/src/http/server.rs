@@ -62,11 +62,15 @@ impl <'a, T> EndpointBuilderHasResponse for EndpointBuilder<'a, T> {
         let mut endpoint = self.endpoint;
         if !endpoint.headers.iter().any(|h| matches!(h, Header::ContentType(_))) {
             let mime_type = match Path::new(self.path).extension() {
-                Some(s) if s == "wasm" => Some("application/wasm"),
-                Some(s) if s == "js"   => Some("application/javascript"),
-                Some(s) if s == "html" => Some("text/html"),
-                Some(s) if s == "css"  => Some("text/css"),
-                _                      => None,
+                Some(s) if s == "wasm"         => Some("application/wasm"),
+                Some(s) if s == "js"           => Some("application/javascript"),
+                Some(s) if s == "webmanifest"  => Some("application/json"),
+                Some(s) if s == "json"         => Some("application/json"),
+                Some(s) if s == "html"         => Some("text/html"),
+                Some(s) if s == "css"          => Some("text/css"),
+                Some(s) if s == "manifest"     => Some("text/cache-manifest"),
+                Some(s) if s == "png"          => Some("image/png"),
+                _                              => None,
                 // TODO: Add more mime types in a compact way
             };
             if let Some(mime_type) = mime_type {
