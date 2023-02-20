@@ -187,12 +187,16 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
                         let Some(req_path) = file_path.to_str().map(|path| path.replace(proj_server_path, "")) else { continue };
                         if req_path == "/index.html" { continue }; // index.html is handled in another watcher, so skip it.
                         let Some(file_contents) = load_file(file_path) else { continue };
-                        println!("\x1b[1m\x1b[92m      Loaded\x1b[0m {}", req_path);
-                        server.config.write().unwrap()
-                            .on_get_request(&req_path)
-                            .set_response_body(file_contents)
-                            .build();
-                        server.broadcast(format!("reload {}", req_path).as_bytes());
+                        let file_did_update = {
+                            server.config.write().unwrap()
+                                .on_get_request(&req_path)
+                                .set_response_body(file_contents)
+                                .build()
+                        };
+                        if file_did_update {
+                            println!("\x1b[1m\x1b[92m      Loaded\x1b[0m {}", req_path);
+                            server.broadcast(format!("reload {}", req_path).as_bytes());
+                        }
                     }
                 }
             };
