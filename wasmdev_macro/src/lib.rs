@@ -157,25 +157,29 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
                             .build()
                     };
                     if code_did_update {
-                        println!("\x1b[1m\x1b[92m      Loaded\x1b[0m /index.wasm, /index.js");
+                        println!("\x1b[1m\x1b[92m     Serving\x1b[0m /index.wasm, /index.js");
                         server.broadcast("reload /index.wasm".as_bytes());
                     }
                 }
             };
 
             let serve_static_files = || {
+                let file_paths = find_files(Path::new(proj_server_path));
+                let file_and_req_path_iter = file_paths.iter()
+                    .filter_map(|file_path| file_path.to_str())
+                    .map(|file_path| (file_path, file_path.replace(proj_server_path, "")))
+                    .filter(|(_, req_path)| *req_path != "/index.html");
                 {
-                    let file_paths = find_files(Path::new(proj_server_path));
                     let mut conf = server.config.write().unwrap();
-                    for file_path in file_paths{
-                        let Some(file_path) = file_path.to_str() else { continue };
-                        let path = file_path.replace(proj_server_path, "");
-                        conf.on_get_request(&path)
+                    for (file_path, req_path) in file_and_req_path_iter.clone(){
+                        conf.on_get_request(&req_path)
                             .lazy_load(file_path)
                             .build();
                     }
                 }
-                println!("\x1b[1m\x1b[92m     Mounted\x1b[0m {} to /", #server_path);
+                for (_, req_path) in file_and_req_path_iter{
+                    println!("\x1b[1m\x1b[92m     Serving\x1b[0m {}", req_path);
+                }
             };
             
             let load_and_serve_file = {
@@ -194,7 +198,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
                                 .build()
                         };
                         if file_did_update {
-                            println!("\x1b[1m\x1b[92m      Loaded\x1b[0m {}", req_path);
+                            println!("\x1b[1m\x1b[92m     Serving\x1b[0m {}", req_path);
                             server.broadcast(format!("reload {}", req_path).as_bytes());
                         }
                     }
@@ -214,7 +218,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
                         .build()
                     };
                     if file_did_update {
-                        println!("\x1b[1m\x1b[92m      Loaded\x1b[0m /index.html");
+                        println!("\x1b[1m\x1b[92m     Serving\x1b[0m /index.html");
                         server.broadcast("reload /index.html".as_bytes());
                     }
                 }
