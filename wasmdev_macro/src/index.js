@@ -28,13 +28,13 @@ var on_msg = msg => {
     }
 }
 
-var reconnect = () => window.setTimeout(initialize_reload_watcher, 5000);
+var reconnect = () => window.setTimeout(open_websocket, 5000);
 
 var open_websocket = init => {
     var ws = new WebSocket(url);
-    if (!init) ws.onopen = () => window.location.reload()
-    ws.onmessage = msg => on_msg(msg)
-    ws.onclose = () => reconnect()
+    if (!init) ws.onopen = () => window.location.reload();
+    ws.onmessage = msg => on_msg(msg);
+    ws.onclose = reconnect;
 }
 
 open_websocket(true);
