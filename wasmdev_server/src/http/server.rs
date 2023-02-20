@@ -215,8 +215,8 @@ impl Server{
 
             // Each connection uses its own thread. Simple but does not scale. Fine for dev server.
             thread::spawn(move || {
-                defer! { println!("Closed connection {peer_addr}") };
-                println!("Got Connection {}", peer_addr);
+                // defer! { println!("Closed connection {peer_addr}") };
+                // println!("Got Connection {}", peer_addr);
                 let mut upgrade_connection = false;
                 loop {
                     let Ok(req) = parse_request(&mut reader) else { return };
@@ -229,7 +229,9 @@ impl Server{
                         let Ok(resp) = resp.map_err(|err| println!("{}", err)) else { return };
                         write_response(&mut writer, &resp)
                     } else {
-                        let mut path = &req.path;
+                        // Ignore query parameters
+                        let mut path = req.path.split("?").next().unwrap();
+                        // println!("Got req: {path} from {peer_addr}");
                         let config = config.read().unwrap();
                         let headers_and_action = loop {
                             let Some(endpoint) = config.endpoints.get(path) else { break None };
@@ -240,7 +242,7 @@ impl Server{
                                     let Some(body) = load_file(Path::new(file_path)) else { break None };
                                     let mut headers = endpoint.headers.clone();
                                     headers.push(Header::ContentLength(body.len()));
-                                    lazy_response = Some((path.clone(), headers, ResponseAction::Content(body)));
+                                    lazy_response = Some((path.to_string(), headers, ResponseAction::Content(body)));
                                     let Some((_, headers, response_action)) = &lazy_response else { break None };
                                     break Some((headers, response_action));
                                 },
@@ -262,7 +264,7 @@ impl Server{
                         write_response(&mut writer, &resp)
                     };
                     let Ok(_) = send_ok.map_err(|err| println!("{}", err)) else { continue };
-                    println!("Sent HTTP response to {peer_addr}");
+                    // println!("Sent HTTP response to {peer_addr}");
                     if let Some((path, headers, ResponseAction::Content(body))) = lazy_response {
                         config.write().unwrap()
                             .on_get_request(&path)
@@ -274,19 +276,19 @@ impl Server{
                 }
                 defer! { 
                     clients.write().unwrap().retain(|client| client.addr != peer_addr);
-                    println!("Closed WebSocket Connection {peer_addr}")
+                    // println!("Closed WebSocket Connection {peer_addr}")
                 };
                 clients.write().unwrap().push(
                     Client { writer: Arc::new(RwLock::new(writer)), addr: peer_addr }
                 );
-                println!("Got WebSocket Connection {}", peer_addr);
+                // println!("Got WebSocket Connection {}", peer_addr);
                 loop {
                     let Ok(buffer) = reader.fill_buf().map_err(|err| println!("{}", err)) else { return };
                     let length = buffer.len();
                     if length == 0 { break };
                     
                     // work with buffer
-                    println!("Received websocket message from {peer_addr}: {buffer:?}");
+                    // println!("Received websocket message from {peer_addr}: {buffer:?}");
                     
                     // ensure the bytes we worked with aren't returned again later
                     reader.consume(length);
