@@ -175,7 +175,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
                             .build();
                     }
                 }
-                println!("\x1b[1m\x1b[92m     Mapping\x1b[0m / => {}/", #server_path);
+                println!("\x1b[1m\x1b[92m     Mounted\x1b[0m {} to /", #server_path);
             };
             
             let load_and_serve_file = {
