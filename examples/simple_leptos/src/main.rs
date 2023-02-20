@@ -8,9 +8,9 @@ pub fn Counter(cx: Scope, initial_value: i32) -> impl IntoView {
     view! { cx,
         <table>
             <td>
-                <tr><button on:click=decrement>"-"</button></tr>
-                <tr><div>{move || value.get().to_string()}</div></tr>
                 <tr><button on:click=increment>"+"</button></tr>
+                <tr><div>{move || value.get().to_string()}</div></tr>
+                <tr><button on:click=decrement>"-"</button></tr>
             </td>
         </table>
     }
