@@ -207,11 +207,16 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
                     let Some(index_html) = load_file(Path::new(proj_html_path)) else { return };
                     let index_html       = from_utf8(&index_html).expect("index.html is not utf8 encoded.");
                     let index_html       = format!("{}\n<script type=\"module\">{}</script>",index_html, #index_js); 
-                    println!("\x1b[1m\x1b[92m      Loaded\x1b[0m /index.html");
-                    server.config.write().unwrap()
+                    let file_did_update = {
+                        server.config.write().unwrap()
                         .on_get_request("/index.html")
                         .set_response_body(index_html.as_bytes().to_vec())
-                        .build();
+                        .build()
+                    };
+                    if file_did_update {
+                        println!("\x1b[1m\x1b[92m      Loaded\x1b[0m /index.html");
+                        server.broadcast("reload /index.html".as_bytes());
+                    }
                 }
             };
 
