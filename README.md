@@ -29,7 +29,7 @@ A simple wasmdev project can be created like so:
 # Make sure that we can build web-assemby targets
 rustup target add wasm32-unknown-unknown
 # Setup project and dependencies
-cargo init my-web-app
+cargo new my-web-app
 cd my-web-app
 cargo add wasmdev
 cargo add web-sys --features Document Element HtmlElement Node Window
