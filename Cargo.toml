@@ -4,6 +4,7 @@ members = [
     "wasmdev_macro",
     "wasmdev_server",
     "examples/simple",
+    "examples/simple_async",
     "examples/counter_leptos",
 ]
 

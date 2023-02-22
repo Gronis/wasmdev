@@ -1,0 +1,18 @@
+[package]
+name = "simple_async"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wasmdev = { workspace = true }
+tokio   = { version = "1.25.0", features = ["rt", "macros"] }
+
+[dependencies.web-sys]
+version = "0.3.4"
+features = [
+  'Document',
+  'Element',
+  'HtmlElement',
+  'Node',
+  'Window',
+]
