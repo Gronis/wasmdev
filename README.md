@@ -9,14 +9,17 @@ wasmdev is a good solution when the following is true for your web application p
 * Your frontend is written entirely in `rust` using popular rust web frontends like `yew` or similar
 * Your frontend web app is a Single Page Application (i.e not server rendered)
 * You want an easy way to start testing your frontend
-* You want a `batteries included` experience where everything you need is installed togeather with the rest of your app dependences (e.g no extra cli-tools like trunk or wasm-pack etc)
-* You have a separate project for your web-api backend, or your frontend is a static web-page with no backend needed (wasmdev web-server only serves your web-page, it does not handle custom api requests).
+* You want a **batteries included** experience where everything you need is installed togeather with the rest of your app dependences (e.g no extra cli-tools like trunk or wasm-pack etc)
+* You have a separate project for your web-api backend, or your frontend is a static web-page with no backend needed (wasmdev web-server only serves your web-page, it does not handle custom api requests)
 
 ## Features
 wasmdev has similar features as `trunk`. Like:
 * Auto-recompile and reload on rust/wasm code-changes
 * Hot-reload on static file-changes
-* Optimized release build without additional tools or processes (I don't think trunk does this)
+
+It also has some features that `trunk` hasn't (I belive), like:
+* Optimized and minified release builds without additional tools or processes
+* Auto-setup of `console_error_panic_hook` in your frontend app (can be disabled)
 
 ## Setup a new web-project with wasmdev
 
