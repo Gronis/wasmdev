@@ -137,6 +137,12 @@ Project file tree:
     └── index.html
 ```
 
+### Use-case: Don't include `console_error_panic_hook`
+Just add `wasmdev` and ignore the default features:
+```bash
+cargo add wasmdev --no-default-features
+```
+
 ## Build release version for distribution:
 
 When building your project with a release build, the web assets (all javascript files and wasm code) will be built and optimized for release.
