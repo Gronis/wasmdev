@@ -114,10 +114,9 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
     let proj_src_path    = format!("{proj_dir}/src");
     let build_wasm_now   = env::var("CARGO_WASMDEV").ok().is_none() && is_release;
 
-    if build_wasm_now {
+    let invalidate_static_asset_cache = if build_wasm_now {
         use std::fs;
         use std::path::Path;
-        use std::ffi::OsStr;
         use std::str::from_utf8;
         use wasmdev_server::utils::{build_wasm, minify_javascript, load_file, find_files};
         let dist_path       = &format!("target/dist/{proj_name}");
@@ -134,7 +133,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
             Some(format!("{}\n<script type=\"module\">{}</script>", html_code, index_js))
         })().unwrap_or(index_html.clone());
 
-        match (|| -> Result<(), std::io::Error> {
+        match (|| -> Result<TokenStream2, std::io::Error> {
             let _ = fs::create_dir_all(dist_path);
             fs::write(format!("{dist_path}/index.wasm"), wasm_code)?;
             fs::write(format!("{dist_path}/index.js"), js_code)?;
@@ -146,7 +145,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
                 .filter(|file_path| !file_path.ends_with("/index.html")); // index.html already handled.
             for file_path in file_path_iter {
                 let file_contents = fs::read(file_path)?;
-                let file_contents = if Path::new(file_path).extension() == Some(OsStr::new("js")) { 
+                let file_contents = if file_path.ends_with(".js") { 
                     minify_javascript(&file_contents)
                 } else { file_contents };
                 let file_rel_path = file_path.replace(&proj_server_path, "");
@@ -155,12 +154,19 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
                 let _ = Path::new(&file_dist_path).parent().map(|p| fs::create_dir_all(p));
                 fs::write(file_dist_path, file_contents)?;
             }
-            Ok(())
+            // Abuse "include_bytes" to make sure static web assets invalidate cargo build cache
+            let invalidate_static_asset_cache = file_paths.iter()
+                .map(|p| p.display().to_string())
+                .filter(|p| !p.ends_with(".rs"))
+                .map(|p| format!("include_bytes!(\"{}\"); ", p))
+                .collect::<Vec<_>>().join("").as_str().parse().unwrap();
+            eprintln!("\x1b[1m\x1b[92m    Finished\x1b[0m release artifacts in: '{dist_path}'");
+            Ok(invalidate_static_asset_cache)
         })() {
-            Ok(_)    => println!("\x1b[1m\x1b[92m    Finished\x1b[0m release artifacts in: '{dist_path}'"),
+            Ok(tt)   => tt,
             Err(msg) => panic!("Failed to build project '{proj_name}' , {msg}"),
-        };
-    }
+        }
+    } else { quote! {} }; // Debug build does not need to invalidate cargo build cache
 
     quote!{
         fn main() {
@@ -171,6 +177,8 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
             use wasmdev::{Server, ServerConfig};
             use wasmdev::utils::{build_wasm, load_file, minify_javascript, make_watcher, find_files, Result, Event};
 
+            // Make sure that release build includes the latest versions of static assets
+            #invalidate_static_asset_cache
             // Make sure rust analyzer analyze the wasm code for better code-completion experience:
             #wasm_main_fn
             // Make a call to it that never executes to avoid compiler warnings:
