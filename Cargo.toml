@@ -15,6 +15,6 @@ opt-level = 'z'
 opt-level = 3
 
 [workspace.dependencies]
-wasmdev        = { path = "./wasmdev" }
-wasmdev_macro  = { path = "./wasmdev_macro" }
-wasmdev_server = { path = "./wasmdev_server" }
+wasmdev        = { version = "0.1.1", path = "./wasmdev" }
+wasmdev_macro  = { version = "0.1.1", path = "./wasmdev_macro" }
+wasmdev_server = { version = "0.1.1", path = "./wasmdev_server" }
