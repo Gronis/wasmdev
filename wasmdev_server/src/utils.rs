@@ -15,21 +15,17 @@ pub fn load_file(file_path: &Path) -> Option<Vec<u8>> {
 }
 
 #[cfg(not(target_family = "wasm"))]
-pub fn build_wasm(input_path: &str, is_release: bool, target_dir: Option<&str>) -> Option<()> {
+pub fn build_wasm(input_path: &str, is_release: bool, target_dir: &str) -> Option<()> {
     use xshell::{Shell, cmd};
     use wasm_bindgen_cli_support::Bindgen;
 
-    let target_dir = target_dir.unwrap_or("target");
-
-    let args = if is_release { vec![
-        "--release", 
+    let mut args = vec![
         "--target", "wasm32-unknown-unknown",
         "--target-dir", target_dir,
         "--color", "always",
-    ]} else { vec![
-        "--target", "wasm32-unknown-unknown",
-        "--color", "always",
-    ]};
+    ];
+    if is_release { args.push("--release") };
+    let args = args; // Remove mutability;
     let sh = Shell::new().expect("Unable to create shell");
     {
         // This lets wasmdev::main know if cargo was started from within wasmdev::main

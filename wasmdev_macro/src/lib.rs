@@ -102,9 +102,10 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
     let index_js         = include_str!("index.js");
     let index_html       = include_str!("index.html");
     let release_mode     = if is_release {"release"} else {"debug"};
-    let index_js         = if is_release {index_js.split("// -- debug --").next().unwrap()} else {index_js};
+    let index_js         = if is_release {index_js.split("// -- debug -- \\").next().unwrap()} else {index_js};
     let index_html       = format!("{index_html}\n<script type=\"module\">{index_js}</script>"); 
-    let out_path         = format!("target/wasm32-unknown-unknown");
+    let target_path      = format!("target/wasmdev-build-cache");
+    let out_path         = format!("{target_path}/wasm32-unknown-unknown");
     let wasm_path        = format!("{out_path}/{release_mode}/{proj_name}.wasm");
     let index_js_path    = format!("{out_path}/{release_mode}/{proj_name}.js");
     let index_wasm_path  = format!("{out_path}/{release_mode}/{proj_name}_bg.wasm");
@@ -119,13 +120,8 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
         use std::ffi::OsStr;
         use std::str::from_utf8;
         use wasmdev_server::utils::{build_wasm, minify_javascript, load_file, find_files};
-        let dist_path        = &format!("target/dist/{proj_name}");
-        let target_path      = &format!("target/wasmdev-release-target");
-        let out_path         = &format!("{target_path}/wasm32-unknown-unknown");
-        let wasm_path        = &format!("{out_path}/{release_mode}/{proj_name}.wasm");
-        let index_js_path    = &format!("{out_path}/{release_mode}/{proj_name}.js");
-        let index_wasm_path  = &format!("{out_path}/{release_mode}/{proj_name}_bg.wasm");
-        let Some(_)          = build_wasm(wasm_path.as_str(), is_release, Some(target_path.as_str()))
+        let dist_path       = &format!("target/dist/{proj_name}");
+        let Some(_)         = build_wasm(wasm_path.as_str(), is_release, target_path.as_str())
             else { panic! ("Failed to build wasm target") };
         let Some(wasm_code) = load_file(Path::new(index_wasm_path.as_str()))
             else { panic! ("Failed to read wasm code") };
@@ -155,7 +151,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
                 } else { file_contents };
                 let file_rel_path = file_path.replace(&proj_server_path, "");
                 let file_dist_path = format!("{dist_path}/{file_rel_path}");
-                // Create parent directory if it does not exist:
+                // Create parent directory to make sure it exists:
                 let _ = Path::new(&file_dist_path).parent().map(|p| fs::create_dir_all(p));
                 fs::write(file_dist_path, file_contents)?;
             }
@@ -203,12 +199,12 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
 
             let build_load_and_serve_app = {
                 let mut server = server.clone();
-                move || {
+                move || -> Option<()>{
                     println!("\x1b[1m\x1b[92m    Building\x1b[0m wasm target");
-                    let Some(_)         = build_wasm(wasm_path, #is_release, None) else { return };
-                    let Some(wasm_code) = load_file(Path::new(index_wasm_path))    else { return };
-                    let Some(js_code)   = load_file(Path::new(index_js_path))      else { return };
-                    let      js_code    = if !#is_release { js_code }              else { minify_javascript(&js_code) };
+                    let _         = build_wasm(wasm_path, #is_release, #target_path)?;
+                    let wasm_code = load_file(Path::new(index_wasm_path))?;
+                    let js_code   = load_file(Path::new(index_js_path))?;
+                    let js_code   = if #is_release { minify_javascript(&js_code) } else { js_code };
                     let code_did_update = {
                         let mut server_config = server.config.write().unwrap();
                         server_config
@@ -224,6 +220,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
                         println!("\x1b[1m\x1b[92m     Serving\x1b[0m /index.wasm, /index.js");
                         server.broadcast("reload /index.wasm".as_bytes());
                     }
+                    Some(())
                 }
             };
 
@@ -296,7 +293,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
             let _watchers = if #is_release {None} else {Some((
                 make_watcher(Path::new(proj_server_path), load_and_serve_file)
                     .expect("Unable to watch static files folder, required for hot-reload when updated."),
-                make_watcher(Path::new(proj_src_path), move |_| build_load_and_serve_app())
+                make_watcher(Path::new(proj_src_path), move |_| { build_load_and_serve_app(); })
                     .expect("Unable to watch src folder, required for hot-reload."),
                 make_watcher(Path::new(proj_html_path), move |_| load_and_serve_index_html()),
                     // Providing a custom index.html is optional, so open watcher is allowed to fail silently here.
