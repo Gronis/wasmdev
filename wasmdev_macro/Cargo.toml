@@ -2,7 +2,7 @@
 name = "wasmdev_macro"
 version = "0.1.1"
 edition = "2021"
-description = "A rust web development server library"
+description = "wasmev macro implementation"
 license = "MIT"
 
 [lib]

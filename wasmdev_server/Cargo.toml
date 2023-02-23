@@ -2,6 +2,8 @@
 name = "wasmdev_server"
 version = "0.1.1"
 edition = "2021"
+description = "wasmdev server implementation"
+license = "MIT"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 base64 = "0.21.0"
