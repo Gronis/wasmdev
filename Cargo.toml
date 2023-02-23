@@ -11,6 +11,9 @@ members = [
 [profile.release]
 opt-level = 'z'
 
+[profile.dev.package.wasm-bindgen-cli-support]
+opt-level = 3
+
 [workspace.dependencies]
 wasmdev        = { path = "./wasmdev" }
 wasmdev_macro  = { path = "./wasmdev_macro" }

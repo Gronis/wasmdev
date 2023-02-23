@@ -1,6 +1,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::{TokenStream as TokenStream2, TokenTree};
 use quote::quote;
+use std::env;
 
 #[derive(Debug, Default)]
 struct Config {
@@ -88,18 +89,82 @@ fn make_wasm_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
 }
 
 fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStream2 {
-    let index_js     = include_str!("index.js");
-    let index_html   = include_str!("index.html");
-    let is_release   = !cfg!(debug_assertions);
-    let release_mode = if is_release {"release"} else {"debug"};
-    let index_js     = if is_release {index_js.split("// -- debug --").next().unwrap()} else {index_js};
-    let index_html   = format!("{index_html}\n<script type=\"module\">{index_js}</script>"); 
-
     let wasm_main_fn_ident = get_fn_name(wasm_main_fn)
         .expect("Unable to get function name of main function");
+    let proj_dir = env::var("CARGO_MANIFEST_DIR")
+        .expect("Cargo did not set env var: CARGO_MANIFEST_DIR");
+    let proj_name = env::var("CARGO_PKG_NAME")
+        .expect("Cargo did not set env var: CARGO_PKG_NAME");
 
-    let server_port = config.port;
-    let server_path = config.path.unwrap_or("src".to_string());
+    let server_port      = config.port;
+    let server_path      = config.path.unwrap_or("src".to_string());
+    let is_release       = !cfg!(debug_assertions);
+    let index_js         = include_str!("index.js");
+    let index_html       = include_str!("index.html");
+    let release_mode     = if is_release {"release"} else {"debug"};
+    let index_js         = if is_release {index_js.split("// -- debug --").next().unwrap()} else {index_js};
+    let index_html       = format!("{index_html}\n<script type=\"module\">{index_js}</script>"); 
+    let out_path         = format!("target/wasm32-unknown-unknown");
+    let wasm_path        = format!("{out_path}/{release_mode}/{proj_name}.wasm");
+    let index_js_path    = format!("{out_path}/{release_mode}/{proj_name}.js");
+    let index_wasm_path  = format!("{out_path}/{release_mode}/{proj_name}_bg.wasm");
+    let proj_html_path   = format!("{proj_dir}/{server_path}/index.html");
+    let proj_server_path = format!("{proj_dir}/{server_path}");
+    let proj_src_path    = format!("{proj_dir}/src");
+    let build_wasm_now   = env::var("CARGO_WASMDEV").ok().is_none() && is_release;
+
+    if build_wasm_now {
+        use std::fs;
+        use std::path::Path;
+        use std::ffi::OsStr;
+        use std::str::from_utf8;
+        use wasmdev_server::utils::{build_wasm, minify_javascript, load_file, find_files};
+        let dist_path        = &format!("target/dist/{proj_name}");
+        let target_path      = &format!("target/wasmdev-release-target");
+        let out_path         = &format!("{target_path}/wasm32-unknown-unknown");
+        let wasm_path        = &format!("{out_path}/{release_mode}/{proj_name}.wasm");
+        let index_js_path    = &format!("{out_path}/{release_mode}/{proj_name}.js");
+        let index_wasm_path  = &format!("{out_path}/{release_mode}/{proj_name}_bg.wasm");
+        let Some(_)          = build_wasm(wasm_path.as_str(), is_release, Some(target_path.as_str()))
+            else { panic! ("Failed to build wasm target") };
+        let Some(wasm_code) = load_file(Path::new(index_wasm_path.as_str()))
+            else { panic! ("Failed to read wasm code") };
+        let Some(js_code)   = load_file(Path::new(index_js_path.as_str()))
+            else { panic! ("Failed to read js code")  };
+        let js_code         = minify_javascript(&js_code);
+        let html_code = (|| -> Option<String>{
+            let html_code = load_file(Path::new(proj_html_path.as_str()))?;
+            let html_code = from_utf8(&html_code).ok()?;
+            Some(format!("{}\n<script type=\"module\">{}</script>", html_code, index_js))
+        })().unwrap_or(index_html.clone());
+
+        match (|| -> Result<(), std::io::Error> {
+            let _ = fs::create_dir_all(dist_path);
+            fs::write(format!("{dist_path}/index.wasm"), wasm_code)?;
+            fs::write(format!("{dist_path}/index.js"), js_code)?;
+            fs::write(format!("{dist_path}/index.html"), html_code)?;
+    
+            let file_paths = find_files(Path::new(&proj_server_path));
+            let file_path_iter = file_paths.iter()
+                .filter_map(|file_path| file_path.to_str())
+                .filter(|file_path| !file_path.ends_with("/index.html")); // index.html already handled.
+            for file_path in file_path_iter {
+                let file_contents = fs::read(file_path)?;
+                let file_contents = if Path::new(file_path).extension() == Some(OsStr::new("js")) { 
+                    minify_javascript(&file_contents)
+                } else { file_contents };
+                let file_rel_path = file_path.replace(&proj_server_path, "");
+                let file_dist_path = format!("{dist_path}/{file_rel_path}");
+                // Create parent directory if it does not exist:
+                let _ = Path::new(&file_dist_path).parent().map(|p| fs::create_dir_all(p));
+                fs::write(file_dist_path, file_contents)?;
+            }
+            Ok(())
+        })() {
+            Ok(_)    => println!("\x1b[1m\x1b[92m    Finished\x1b[0m release artifacts in: '{dist_path}'"),
+            Err(msg) => panic!("Failed to build project '{proj_name}' , {msg}"),
+        };
+    }
 
     quote!{
         fn main() {
@@ -115,14 +180,13 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
             // Make a call to it that never executes to avoid compiler warnings:
             if false { #wasm_main_fn_ident () }
 
-            static wasm_path:        &str = concat!("target/wasm32-unknown-unknown", "/", #release_mode, "/", env!("CARGO_PKG_NAME"), ".wasm");
-            static index_js_path:    &str = concat!("target/wasm32-unknown-unknown", "/", #release_mode, "/", env!("CARGO_PKG_NAME"), ".js");
-            static index_wasm_path:  &str = concat!("target/wasm32-unknown-unknown", "/", #release_mode, "/", env!("CARGO_PKG_NAME"), "_bg.wasm");
-            static proj_html_path:   &str = concat!(env!("CARGO_MANIFEST_DIR"),      "/", #server_path,  "/", "index.html");
-            static proj_server_path: &str = concat!(env!("CARGO_MANIFEST_DIR"),      "/", #server_path);
-            static proj_src_path:    &str = concat!(env!("CARGO_MANIFEST_DIR"),      "/", "src");
-
-            let server_port = #server_port;
+            let wasm_path        = #wasm_path;
+            let index_js_path    = #index_js_path;
+            let index_wasm_path  = #index_wasm_path; 
+            let proj_html_path   = #proj_html_path;
+            let proj_server_path = #proj_server_path;
+            let proj_src_path    = #proj_src_path;
+            let server_port      = #server_port;
 
             let server = Server::new();
             {
@@ -141,10 +205,10 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
                 let mut server = server.clone();
                 move || {
                     println!("\x1b[1m\x1b[92m    Building\x1b[0m wasm target");
-                    let Some(_)         = build_wasm(wasm_path, #is_release)    else { return };
-                    let Some(wasm_code) = load_file(Path::new(index_wasm_path)) else { return };
-                    let Some(js_code)   = load_file(Path::new(index_js_path))   else { return };
-                    let      js_code    = if !#is_release { js_code }           else { minify_javascript(&js_code) };
+                    let Some(_)         = build_wasm(wasm_path, #is_release, None) else { return };
+                    let Some(wasm_code) = load_file(Path::new(index_wasm_path))    else { return };
+                    let Some(js_code)   = load_file(Path::new(index_js_path))      else { return };
+                    let      js_code    = if !#is_release { js_code }              else { minify_javascript(&js_code) };
                     let code_did_update = {
                         let mut server_config = server.config.write().unwrap();
                         server_config

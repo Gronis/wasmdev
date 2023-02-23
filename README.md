@@ -1,25 +1,27 @@
 # wasmdev
 Main repo for wasmdev, a rust web development server.
 
-**Note:** Project is in early stage of development. While it is near feature complete, bugs or other problems might still be present. Don't use for large or $$$ projects. Use more tested tools like `trunk` instead.
+## Project Goal
+wasmdev aims to provide the most simple way to develop your frontend web application for rust. The idea is to use `cargo` just like you do with a native/binary executable. No need to install tools like `trunk` or `wasm-pack`. Just add `wasmdev` to your dependencies and put a simple macro in front of your main function, and you have yourself a frontend web-development server! You can also build all web assets with a simple `cargo build --release`, and they will be minified and ready for distribution. How cool is that!
+
+### Disclaimer
+**Note:** Project is in early stage of development. Bugs or other problems might still be present, error messages might have a long way to go etc. Don't use for large or $$$ projects. Use more tested tools like `trunk` instead.
 
 **Note:** The server application that is used to run and test your web frontend app is NOT suitable for hosting your web-app in a production environment. It lacks many common http server features and is only intended to be a fast and simple way to test and develop your web frontend app.
 
-wasmdev is a good solution when the following is true for your web application project
-* Your frontend is written entirely in `rust` using popular rust web frontends like `yew` or similar
-* Your frontend web app is a Single Page Application (i.e not server rendered)
-* You want an easy way to start testing your frontend
-* You want a **batteries included** experience where everything you need is installed togeather with the rest of your app dependences (e.g no extra cli-tools like trunk or wasm-pack etc)
-* You have a separate project for your web-api backend, or your frontend is a static web-page with no backend needed (wasmdev web-server only serves your web-page, it does not handle custom api requests)
-
-## Features
+### Features
 wasmdev has similar features as `trunk`. Like:
-* Auto-recompile and reload on rust/wasm code-changes
-* Hot-reload on static file-changes
+* Auto-recompile and reload on rust/wasm on code changes
+* Hot-reload on static file changes
 
-It also has some features that `trunk` hasn't (I belive), like:
-* Optimized and minified release builds without additional tools or processes
+It also has some features that `trunk` don't have (I believe), like:
+* Optimized and minified release builds without additional tools or processes:
+    * Run `cargo build --release` and you have your dist-optimized assets
 * Auto-setup of `console_error_panic_hook` in your frontend app (can be disabled)
+
+### What wasmdev DOESN'T DO:
+* Server side rendering
+* Transpilation of javascript to adhere to a certain ECMAScript version 
 
 ## Setup a new web-project with wasmdev
 
@@ -86,7 +88,7 @@ Simpilfied output:
      Serving ┃  http://127.0.0.1:8080  ┃ <= Click to open your app!
              ┗━━━━━━━━━━━━━━━━━━━━━━━━━┛
 ```
-
+This project is equivalent with the provided example project: `simple` that can be found in the `examples` folder.
 ## Configuration
 
 The following options can be set to `wasmdev::main` macro:
@@ -101,7 +103,7 @@ fn main() {
 }
 ```
 
-### Example: `index.html` override
+### Use-case: `index.html` override
 
 By default, all files in `src` folder is served by the web server. You can add an `index.html` file here to override the minimalistic default one:
 ```
@@ -114,8 +116,8 @@ By default, all files in `src` folder is served by the web server. You can add a
 ```
 This is necessary to pull in additional assets like css styles or setup a Progressive Web Application using Service Workers.
 
-### Example: override asset path:
-If you want to have a separate path to static assets, the can be specified in the `wasmdev::main` macro as mention previously. This is recommended, since the web-server won't try to recompile your wasm-code when you change your static assets like css styles.
+### Use-case: override asset path:
+If you want to have a separate path to static assets, they can be specified in the `wasmdev::main` macro as mention previously. This is recommended, since the web-server won't try to recompile your wasm-code when you change your static assets like css styles.
 
 `src/main.rs`:
 ```rust
@@ -135,23 +137,45 @@ Project file tree:
     └── index.html
 ```
 
-## Release ready build:
+## Build release version for distribution:
 
-When running your project with a release build, the web assets (generated javascript files and wasm code) will be optimized for release and any hot-reload code is removed.
+When building your project with a release build, the web assets (all javascript files and wasm code) will be built and optimized for release.
+```bash
+cargo build --release
 ```
-cargo run --release
 ```
-When navigating to `127.0.0.1:8080` you will notice that the javascript code (index.js) and wasm code (index.wasm) is minified and reduced in size.
+   Compiling wasmdev_macro
+   Compiling wasmdev
+   Compiling my-web-app
+    Finished release [optimized] target(s)
+    Finished release artifacts in: 'target/dist/my-web-app'
+    Finished release [optimized] target(s)
+```
+The release artifacts will be located at `target/dist/{project_name}`
+```
+.
+└── dist
+    └── my-web-app
+        ├── index.html
+        ├── index.js
+        └── index.wasm
+```
 
-Currently, the optimized versions exists only in working memory on the web-server, so exporting the app is very manual at the moment. This is expected to change in the future.
+## Running examples
+
+All examples can be built and executed by cargo like this:
+```bash
+cargo run -p <example>
+# Run the simple project that outputs "Hello World" in the web-browser implemented with web_sys bindings:
+cargo run -p simple
+```
+See `examples` folder for a complete list of examples.
 
 ## TODO:
 Missing features that will or might be added in the future:
 
-* When running in release mode: export all assets for easier production deploy process
-* Minify any static javascript (not just generated index.js) assets when doing a release export
 * Write tests and more examples for popular web projects (yew, sycamore, etc).
-* Implement an easy way to run all tests (in the browser) by simply running `cargo test` with the test result in the cli window. Not sure if this is possible, but it is a goal. This is one of the reason why I wrote wasmdev to begin with so if this is implemented, it would be great.
+* Implement an easy way to run all tests (in the browser) by simply running `cargo test` with the test result in the cli window. Not sure if this is possible.
 
 ## License
 TBD

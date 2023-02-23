@@ -15,17 +15,27 @@ pub fn load_file(file_path: &Path) -> Option<Vec<u8>> {
 }
 
 #[cfg(not(target_family = "wasm"))]
-pub fn build_wasm(input_path: &str, is_release: bool) -> Option<()> {
+pub fn build_wasm(input_path: &str, is_release: bool, target_dir: Option<&str>) -> Option<()> {
     use xshell::{Shell, cmd};
     use wasm_bindgen_cli_support::Bindgen;
 
-    let args = if is_release { 
-        vec!["--release", "--target", "wasm32-unknown-unknown"]
-    } else {
-        vec!["--target", "wasm32-unknown-unknown"]
-    };
+    let target_dir = target_dir.unwrap_or("target");
+
+    let args = if is_release { vec![
+        "--release", 
+        "--target", "wasm32-unknown-unknown",
+        "--target-dir", target_dir,
+        "--color", "always",
+    ]} else { vec![
+        "--target", "wasm32-unknown-unknown",
+        "--color", "always",
+    ]};
     let sh = Shell::new().expect("Unable to create shell");
-    cmd!(sh, "cargo build").args(args).quiet().run().ok()?;
+    {
+        // This lets wasmdev::main know if cargo was started from within wasmdev::main
+        let _env_guard = sh.push_env("CARGO_WASMDEV", "1");
+        cmd!(sh, "cargo build").args(args).quiet().run().ok()?;
+    }
     let output_path = Path::new(input_path).parent().expect("No parent when building wasm");
     Bindgen::new()
         .input_path(input_path)
