@@ -162,6 +162,7 @@ The release artifacts will be located at `target/dist/{project_name}`
 ```
 When building in release mode, cache invalidation of build artifacts might not always work. This can happen if:
 * You create a new static asset without modifying the rust source code or any existing static asset.
+
 Changing any rust file in src directory, or pre-existing static asset fixes this. 
 
 ## Running examples
