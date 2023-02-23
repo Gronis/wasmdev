@@ -2,6 +2,8 @@
 name = "wasmdev"
 version = "0.1.1"
 edition = "2021"
+description = "A rust web development server library"
+license = "MIT"
 
 [dependencies]
 wasmdev_macro = { workspace = true}
