@@ -1,6 +1,6 @@
 [package]
 name = "wasmdev_server"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
