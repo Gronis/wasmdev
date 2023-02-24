@@ -8,7 +8,51 @@ struct Config {
     port: u16,
     path: Option<String>,
 }
-
+///
+/// Turns the main function for non-`wasm` targets into a hot-reload development web-server.
+/// 
+/// ### Arguments
+/// * **port** (optional): Specify which TCP-port to use (Default: 8080)
+/// * **path** (optional): Specify path to static web assets (Default: "src")
+/// Usage:
+/// ```rust
+/// // src/main.rs
+/// #[wasmdev::main]
+/// fn main() {
+///     let window = web_sys::window().unwrap();
+///     let document = window.document().unwrap();
+///     let body = document.body().unwrap();
+///     let val = document.create_element("p").unwrap();
+///     val.set_text_content(Some("Hello World"));
+///     body.append_child(&val).unwrap();
+/// }
+/// 
+/// ```
+/// 
+/// ### Manually specifying port
+/// ```rust
+/// #[wasmdev::main(port: 3000)]
+/// fn main() { 
+///   // ...
+/// }
+/// 
+/// ```
+/// 
+/// ### Manually specifying static asset directory
+/// ```rust
+/// #[wasmdev::main(path: "www")]
+/// fn main() { 
+///   // ...
+/// }
+/// ```
+/// File tree:
+/// ```
+/// ├── Cargo.toml
+/// ├── src
+/// │   └── main.rs
+/// └── www
+///     └── index.html
+/// ```
 #[proc_macro_attribute]
 pub fn main(attrs: TokenStream, main_fn: TokenStream) -> TokenStream {
 
