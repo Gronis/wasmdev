@@ -21,15 +21,15 @@ fn main() {
 cargo run
 ```
 ```log
-   Compiling my-web-app
-    Finished dev [unoptimized + debuginfo] target(s)
-     Running `target/debug/my-web-app`
-    Building wasm target
-   Compiling my-web-app
-    Finished dev [unoptimized + debuginfo] target(s)
-             ┏━━━━━━━━━━━━━━━━━━━━━━━━━┓
-     Serving ┃  http://127.0.0.1:8080  ┃ <= Click to open your app!
-             ┗━━━━━━━━━━━━━━━━━━━━━━━━━┛
+Compiling my-web-app
+ Finished dev [unoptimized + debuginfo] target(s)
+  Running `target/debug/my-web-app`
+ Building wasm target
+Compiling my-web-app
+ Finished dev [unoptimized + debuginfo] target(s)
+          ┏━━━━━━━━━━━━━━━━━━━━━━━━━┓
+  Serving ┃  http://127.0.0.1:8080  ┃ <= Click to open your app!
+          ┗━━━━━━━━━━━━━━━━━━━━━━━━━┛
 ```
 
 # Project Goal
