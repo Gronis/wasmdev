@@ -4,6 +4,7 @@ version = "0.1.1"
 edition = "2021"
 description = "wasmev macro implementation"
 license = "MIT"
+repository = "https://github.com/Gronis/wasmdev"
 
 [lib]
 proc-macro = true
