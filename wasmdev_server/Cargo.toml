@@ -1,11 +1,11 @@
 [package]
-name = "wasmdev_server"
-version = "0.1.1"
-edition = "2021"
+name        = "wasmdev_server"
+version     = { workspace = true }
+edition     = "2021"
 description = "wasmdev server implementation"
-license = "MIT"
-repository = "https://github.com/Gronis/wasmdev"
-readme = "../README.md"
+license     = "MIT"
+repository  = "https://github.com/Gronis/wasmdev"
+readme      = "../README.md"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 base64 = "0.21.0"

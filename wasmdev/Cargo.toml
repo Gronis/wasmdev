@@ -1,11 +1,11 @@
 [package]
-name = "wasmdev"
-version = "0.1.1"
-edition = "2021"
+name        = "wasmdev"
+version     = { workspace = true }
+edition     = "2021"
 description = "A rust web development server library"
-license = "MIT"
-repository = "https://github.com/Gronis/wasmdev"
-readme = "../README.md"
+license     = "MIT"
+repository  = "https://github.com/Gronis/wasmdev"
+readme      = "../README.md"
 
 [dependencies]
 wasmdev_macro = { workspace = true}
