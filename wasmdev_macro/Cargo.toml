@@ -5,6 +5,7 @@ edition = "2021"
 description = "wasmev macro implementation"
 license = "MIT"
 repository = "https://github.com/Gronis/wasmdev"
+readme = "../README.md"
 
 [lib]
 proc-macro = true
