@@ -4,6 +4,7 @@
 [![docs.rs](https://docs.rs/wasmdev/badge.svg)](https://docs.rs/wasmdev)
 
 Simple web development for web frontends written in rust:
+
 ```rust
 // src/main.rs
 #[wasmdev::main]
@@ -16,6 +17,7 @@ fn main() {
     body.append_child(&val).unwrap();
 }
 ```
+Terminal:
 ```bash
 cargo run
 ```
@@ -30,6 +32,19 @@ Compiling my-web-app
   Serving ┃  http://127.0.0.1:8080  ┃ <= Click to open your app!
           ┗━━━━━━━━━━━━━━━━━━━━━━━━━┛
 ```
+
+Browser:
+
+<svg width="400px" height="200px">
+    <rect x="0" y="0"  width="400" height="200" style="fill:rgb(20,20,20)" />
+    <rect x="8" y="50" width="384" height="142" style="fill:rgb(30,30,30)" />
+    <rect x="0" y="0"  width="400" height="50" style="fill:rgb(20,20,20) " />
+    <rect x="8" y="8"  width="384" height="34" style="fill:rgb(30,30,30) " />
+    <text x="20" y="30" style="fill:rgb(200,200,200);font: 16px sans-serif;">http://127.0.0.1:8080</text>
+    <!-- <rect x="0" y="50" width="400px" height="1" style="fill:rgb(50,50,50) " /> -->
+    <text x="20" y="86" style="fill:rgb(200,200,200);font: 28px sans-serif;">Hello World</text>
+</svg>
+
 
 # Project Goal
 wasmdev aims to provide the most simple way to develop your rust frontend web application. The idea is to use `cargo` just like you would do when developing a native/binary executable. No need to install tools like `trunk` or `wasm-pack`. Just add `wasmdev` to your dependencies and add a macro in front of your main function, and you have yourself a web server fit for rapid development! You can also build all web assets with a simple `cargo build --release`, and they will be minified and ready for distribution. How cool is that!
