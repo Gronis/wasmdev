@@ -3,7 +3,7 @@
 [![crates.io](https://img.shields.io/crates/v/wasmdev.svg)](https://crates.io/crates/wasmdev)
 [![docs.rs](https://docs.rs/wasmdev/badge.svg)](https://docs.rs/wasmdev)
 
-Simple web development in rust based web frontends:
+Simple web development for web frontends written in rust:
 ```rust
 // src/main.rs
 #[wasmdev::main]
@@ -15,7 +15,6 @@ fn main() {
     val.set_text_content(Some("Hello World"));
     body.append_child(&val).unwrap();
 }
-
 ```
 ```bash
 cargo run
@@ -33,7 +32,7 @@ Compiling my-web-app
 ```
 
 # Project Goal
-wasmdev aims to provide the most simple way to develop your frontend web application for rust. The idea is to use `cargo` just like you do with a native/binary executable. No need to install tools like `trunk` or `wasm-pack`. Just add `wasmdev` to your dependencies and put a simple macro in front of your main function, and you have yourself a frontend web-development server! You can also build all web assets with a simple `cargo build --release`, and they will be minified and ready for distribution. How cool is that!
+wasmdev aims to provide the most simple way to develop your rust frontend web application. The idea is to use `cargo` just like you would do when developing a native/binary executable. No need to install tools like `trunk` or `wasm-pack`. Just add `wasmdev` to your dependencies and add a macro in front of your main function, and you have yourself a web server fit for rapid development! You can also build all web assets with a simple `cargo build --release`, and they will be minified and ready for distribution. How cool is that!
 
 # Disclaimer
 **Note:** Project is in early stage of development. Bugs or other problems might still be present, error messages might have a long way to go etc. Don't use for large or $$$ projects. Use more tested tools like `trunk` instead.
@@ -44,7 +43,7 @@ wasmdev aims to provide the most simple way to develop your frontend web applica
 ### What wasmdev **DO**:
 wasmdev has similar features as `trunk`. Like:
 * Auto-recompile and reload on rust/wasm on code changes
-* Hot-reload on static file changes
+* Hot-reload on static file changes (like css-styles)
 
 It also has some features that `trunk` don't have (I believe), like:
 * Optimized and minified release builds without additional tools or processes:
@@ -62,9 +61,8 @@ It also has some features that `trunk` don't have (I believe), like:
 The following options can be set to `wasmdev::main` macro:
 * **port**: What tcp port to run the http server on. Defaults to port `8080`
 * **path**: Where to put your static web assets like css styles, icons, logos etc. Defaults to the `"src"` folder.
-
-`src/main.rs`:
 ```rust
+// src/main.rs
 #[wasmdev::main(port: 8080, path: "src")]
 fn main() {
     //...
@@ -73,33 +71,37 @@ fn main() {
 
 ## Use-case: `index.html` override
 
-By default, all files in `src` folder is served by the web server. You can add an `index.html` file here to override the minimalistic default one:
+By default, all files in `src` folder is served by the web server. You can add your `index.html` file here to override the default one. This is necessary to pull in additional assets like css styles.
+```html
+<!doctype html>
+<html>
+    <head><link rel="stylesheet" href="/index.css"></head>
+    <body></body>
+</html>
 ```
-├── Cargo.lock
+Project file-tree:
+```
 ├── Cargo.toml
 └── src
+    ├── index.css
     ├── index.html
     └── main.rs
 ```
-This is necessary to pull in additional assets like css styles or setup a Progressive Web Application using Service Workers.
-
 ## Use-case: override asset path:
 If you want to have a separate path to static assets, they can be specified in the `wasmdev::main` macro as mention previously. This is recommended, since the web-server won't try to recompile your wasm-code when you change your static assets like css styles.
-
-`src/main.rs`:
 ```rust
+// src/main.rs
 #[wasmdev::main(path: "www")]
 fn main() {
     //...
 }
 ```
-Project file tree:
+Project file-tree:
 ```
 ├── Cargo.toml
 ├── src
 │   └── main.rs
 └── www
-    ├── index.css
     └── index.html
 ```
 
@@ -153,6 +155,7 @@ See `examples` folder for a complete list of examples.
 
 ## TODO:
 
+* On release build, remove files that no longer exists in static asset folder
 * Unit tests
 * Docs
 * More examples for popular web projects (yew, sycamore, etc).
