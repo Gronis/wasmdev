@@ -225,11 +225,11 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
                 fs::write(file_dist_path, file_contents)?;
             }
             // Abuse "include_bytes" to make sure static web assets invalidate cargo build cache
-            let invalidate_static_asset_cache = file_paths.iter()
+            let invalidate_static_asset_cache = TokenStream2::from_iter(file_paths.iter()
                 .filter_map(|p| p.to_str())
                 .filter(|p| !p.ends_with(".rs"))
-                .map(|p| format!("include_bytes!(\"{}\"); ", p))
-                .collect::<Vec<_>>().join("").as_str().parse().unwrap();
+                .map(|p| quote!{ include_bytes!(#p); })
+            );
             eprintln!("\x1b[1m\x1b[92m    Finished\x1b[0m release artifacts in: '{dist_path}'");
             Ok(invalidate_static_asset_cache)
         })() {
