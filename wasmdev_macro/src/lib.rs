@@ -214,154 +214,159 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
 
     quote!{
         fn main() {
-            use std::net::TcpListener;
-            use std::path::{Path, PathBuf};
-            use std::str::from_utf8;
-            use wasmdev::prelude::*;
-            use wasmdev::{Server, ServerConfig};
-            use wasmdev::utils::{build_wasm, load_file, minify_javascript, make_watcher, find_files, Result, Event};
 
-            // Make sure that release build includes the latest versions of static assets
-            #invalidate_static_asset_cache
             // Make sure rust analyzer analyze the wasm code for better code-completion experience:
             #wasm_main_fn
-            // Make a call to it that never executes to avoid compiler warnings:
-            if false { #wasm_main_fn_ident () }
 
-            let wasm_path        = #wasm_path;
-            let index_js_path    = #index_js_path;
-            let index_wasm_path  = #index_wasm_path; 
-            let proj_html_path   = #proj_html_path;
-            let proj_server_path = #proj_server_path;
-            let proj_src_path    = #proj_src_path;
-            let server_port      = #server_port;
-
-            let server = Server::new();
+            // Scope all this in order to not pollute main fn scope.
             {
-                let mut server_config = server.config.write().unwrap();
-                server_config
-                    .on_get_request("/")
-                    .internal_redirect("/index.html")
-                    .build();
-                server_config
-                    .on_get_request("/index.html")
-                    .set_response_body(#index_html.as_bytes().to_vec())
-                    .build();
-            }
+                use std::net::TcpListener;
+                use std::path::{Path, PathBuf};
+                use std::str::from_utf8;
+                use wasmdev::prelude::*;
+                use wasmdev::{Server, ServerConfig};
+                use wasmdev::utils::{build_wasm, load_file, minify_javascript, make_watcher, find_files, Result, Event};
 
-            let build_load_and_serve_app = {
-                let mut server = server.clone();
-                move || -> Option<()>{
-                    println!("\x1b[1m\x1b[92m    Building\x1b[0m wasm target");
-                    let _         = build_wasm(wasm_path, #is_release, #target_path)?;
-                    let wasm_code = load_file(Path::new(index_wasm_path))?;
-                    let js_code   = load_file(Path::new(index_js_path))?;
-                    let js_code   = if #is_release { minify_javascript(&js_code) } else { js_code };
-                    let code_did_update = {
-                        let mut server_config = server.config.write().unwrap();
-                        server_config
-                            .on_get_request("/index.js")
-                            .set_response_body(js_code)
-                            .build();
-                        server_config
-                            .on_get_request("/index.wasm")
-                            .set_response_body(wasm_code)
-                            .build()
-                    };
-                    if code_did_update {
-                        println!("\x1b[1m\x1b[92m     Serving\x1b[0m /index.wasm, /index.js");
-                        server.broadcast("reload /index.wasm".as_bytes());
-                    }
-                    Some(())
-                }
-            };
+                // Make sure that release build includes the latest versions of static assets:
+                #invalidate_static_asset_cache
+                // Make sure main is referenced to avoid "unused" compiler warnings:
+                #wasm_main_fn_ident;
 
-            let serve_static_files = || {
-                let file_paths = find_files(Path::new(proj_server_path));
-                let file_and_req_path_iter = file_paths.iter()
-                    .filter_map(|file_path| file_path.to_str())
-                    .map(|file_path| (file_path, file_path.replace(proj_server_path, "")))
-                    .filter(|(_, req_path)| *req_path != "/index.html");
+                let wasm_path        = #wasm_path;
+                let index_js_path    = #index_js_path;
+                let index_wasm_path  = #index_wasm_path;
+                let proj_html_path   = #proj_html_path;
+                let proj_server_path = #proj_server_path;
+                let proj_src_path    = #proj_src_path;
+                let server_port      = #server_port;
+
+                let server = Server::new();
                 {
-                    let mut conf = server.config.write().unwrap();
-                    for (file_path, req_path) in file_and_req_path_iter.clone(){
-                        conf.on_get_request(&req_path)
-                            .lazy_load(file_path)
-                            .build();
-                    }
+                    let mut server_config = server.config.write().unwrap();
+                    server_config
+                        .on_get_request("/")
+                        .internal_redirect("/index.html")
+                        .build();
+                    server_config
+                        .on_get_request("/index.html")
+                        .set_response_body(#index_html.as_bytes().to_vec())
+                        .build();
                 }
-                for (_, req_path) in file_and_req_path_iter{
-                    println!("\x1b[1m\x1b[92m     Serving\x1b[0m {}", req_path);
-                }
-            };
-            
-            let load_and_serve_file = {
-                let mut server = server.clone();
-                move |event: Result<Event> | {
-                    let Some(event) = event.ok() else { return };
-                    for file_path in event.paths {
-                        let file_path = file_path.as_path();
-                        let Some(req_path) = file_path.to_str().map(|path| path.replace(proj_server_path, "")) else { continue };
-                        if req_path == "/index.html" { continue }; // index.html is handled in another watcher, so skip it.
-                        let Some(file_contents) = load_file(file_path) else { continue };
-                        let file_did_update = {
-                            server.config.write().unwrap()
-                                .on_get_request(&req_path)
-                                .set_response_body(file_contents)
+
+                let build_load_and_serve_app = {
+                    let mut server = server.clone();
+                    move || -> Option<()>{
+                        println!("\x1b[1m\x1b[92m    Building\x1b[0m wasm target");
+                        let _         = build_wasm(wasm_path, #is_release, #target_path)?;
+                        let wasm_code = load_file(Path::new(index_wasm_path))?;
+                        let js_code   = load_file(Path::new(index_js_path))?;
+                        let js_code   = if #is_release { minify_javascript(&js_code) } else { js_code };
+                        let code_did_update = {
+                            let mut server_config = server.config.write().unwrap();
+                            server_config
+                                .on_get_request("/index.js")
+                                .set_response_body(js_code)
+                                .build();
+                            server_config
+                                .on_get_request("/index.wasm")
+                                .set_response_body(wasm_code)
                                 .build()
                         };
-                        if file_did_update {
-                            println!("\x1b[1m\x1b[92m     Serving\x1b[0m {}", req_path);
-                            server.broadcast(format!("reload {}", req_path).as_bytes());
+                        if code_did_update {
+                            println!("\x1b[1m\x1b[92m     Serving\x1b[0m /index.wasm, /index.js");
+                            server.broadcast("reload /index.wasm".as_bytes());
+                        }
+                        Some(())
+                    }
+                };
+
+                let serve_static_files = || {
+                    let file_paths = find_files(Path::new(proj_server_path));
+                    let file_and_req_path_iter = file_paths.iter()
+                        .filter_map(|file_path| file_path.to_str())
+                        .map(|file_path| (file_path, file_path.replace(proj_server_path, "")))
+                        .filter(|(_, req_path)| *req_path != "/index.html");
+                    {
+                        let mut conf = server.config.write().unwrap();
+                        for (file_path, req_path) in file_and_req_path_iter.clone(){
+                            conf.on_get_request(&req_path)
+                                .lazy_load(file_path)
+                                .build();
                         }
                     }
-                }
-            };
-            
-            let load_and_serve_index_html = {
-                let mut server = server.clone();
-                move || {
-                    let Some(index_html) = load_file(Path::new(proj_html_path)) else { return };
-                    let index_html       = from_utf8(&index_html).expect("index.html is not utf8 encoded.");
-                    let index_html       = format!("{}\n<script type=\"module\">{}</script>",index_html, #index_js); 
-                    let file_did_update = {
-                        server.config.write().unwrap()
-                        .on_get_request("/index.html")
-                        .set_response_body(index_html.as_bytes().to_vec())
-                        .build()
-                    };
-                    if file_did_update {
-                        println!("\x1b[1m\x1b[92m     Serving\x1b[0m /index.html");
-                        server.broadcast("reload /index.html".as_bytes());
+                    for (_, req_path) in file_and_req_path_iter{
+                        println!("\x1b[1m\x1b[92m     Serving\x1b[0m {}", req_path);
                     }
-                }
-            };
+                };
+                
+                let load_and_serve_file = {
+                    let mut server = server.clone();
+                    move |event: Result<Event> | {
+                        let Some(event) = event.ok() else { return };
+                        for file_path in event.paths {
+                            let file_path = file_path.as_path();
+                            let Some(req_path) = file_path.to_str().map(|path| path.replace(proj_server_path, "")) else { continue };
+                            if req_path == "/index.html" { continue }; // index.html is handled in another watcher, so skip it.
+                            let Some(file_contents) = load_file(file_path) else { continue };
+                            let file_did_update = {
+                                server.config.write().unwrap()
+                                    .on_get_request(&req_path)
+                                    .set_response_body(file_contents)
+                                    .build()
+                            };
+                            if file_did_update {
+                                println!("\x1b[1m\x1b[92m     Serving\x1b[0m {}", req_path);
+                                server.broadcast(format!("reload {}", req_path).as_bytes());
+                            }
+                        }
+                    }
+                };
+                
+                let load_and_serve_index_html = {
+                    let mut server = server.clone();
+                    move || {
+                        let Some(index_html) = load_file(Path::new(proj_html_path)) else { return };
+                        let index_html       = from_utf8(&index_html).expect("index.html is not utf8 encoded.");
+                        let index_html       = format!("{}\n<script type=\"module\">{}</script>",index_html, #index_js); 
+                        let file_did_update = {
+                            server.config.write().unwrap()
+                            .on_get_request("/index.html")
+                            .set_response_body(index_html.as_bytes().to_vec())
+                            .build()
+                        };
+                        if file_did_update {
+                            println!("\x1b[1m\x1b[92m     Serving\x1b[0m /index.html");
+                            server.broadcast("reload /index.html".as_bytes());
+                        }
+                    }
+                };
 
-            // Load server resources:
-            serve_static_files();
-            load_and_serve_index_html();
-            build_load_and_serve_app();
+                // Load server resources:
+                serve_static_files();
+                load_and_serve_index_html();
+                build_load_and_serve_app();
 
-            let _watchers = if #is_release {None} else {Some((
-                make_watcher(Path::new(proj_server_path), load_and_serve_file)
-                    .expect("Unable to watch static files folder, required for hot-reload when updated."),
-                make_watcher(Path::new(proj_src_path), move |_| { build_load_and_serve_app(); })
-                    .expect("Unable to watch src folder, required for hot-reload."),
-                make_watcher(Path::new(proj_html_path), move |_| load_and_serve_index_html()),
-                    // Providing a custom index.html is optional, so open watcher is allowed to fail silently here.
-            ))};
-            
-            println!("\x1b[1m\x1b[92m            \x1b[0m ┏\x1b[0m━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m┓");
-            println!("\x1b[1m\x1b[92m     Serving\x1b[0m ┃\x1b[1m  http://127.0.0.1:{   } \x1b[0m┃ <= Click to open your app! ", format!("{: <5}", server_port));
-            println!("\x1b[1m\x1b[92m            \x1b[0m ┗\x1b[0m━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m┛");
-            
-            let addr = format!("127.0.0.1:{}", server_port);
-            let Some(tcp_socket) = TcpListener::bind(addr).ok() else { 
-                panic!("Unable to bind tcp port: {}", server_port)
-            };
-            let Some(()) = server.listen(tcp_socket).ok() else { 
-                panic!("Unable to handle incomming connection")
-            };
+                let _watchers = if #is_release {None} else {Some((
+                    make_watcher(Path::new(proj_server_path), load_and_serve_file)
+                        .expect("Unable to watch static files folder, required for hot-reload when updated."),
+                    make_watcher(Path::new(proj_src_path), move |_| { build_load_and_serve_app(); })
+                        .expect("Unable to watch src folder, required for hot-reload."),
+                    make_watcher(Path::new(proj_html_path), move |_| load_and_serve_index_html()),
+                        // Providing a custom index.html is optional, so open watcher is allowed to fail silently here.
+                ))};
+                
+                println!("\x1b[1m\x1b[92m            \x1b[0m ┏\x1b[0m━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m┓");
+                println!("\x1b[1m\x1b[92m     Serving\x1b[0m ┃\x1b[1m  http://127.0.0.1:{   } \x1b[0m┃ <= Click to open your app! ", format!("{: <5}", server_port));
+                println!("\x1b[1m\x1b[92m            \x1b[0m ┗\x1b[0m━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m┛");
+                
+                let addr = format!("127.0.0.1:{}", server_port);
+                let Some(tcp_socket) = TcpListener::bind(addr).ok() else { 
+                    panic!("Unable to bind tcp port: {}", server_port)
+                };
+                let Some(()) = server.listen(tcp_socket).ok() else { 
+                    panic!("Unable to handle incomming connection")
+                };
+            }
         }
     }
 }
