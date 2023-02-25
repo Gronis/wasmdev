@@ -17,7 +17,6 @@ fn main() {
     body.append_child(&val).unwrap();
 }
 ```
-Terminal:
 ```bash
 cargo run
 ```
