@@ -13,16 +13,14 @@ var on_msg = msg => {
         window.location.reload();
     } else if (path.endsWith(".js")) {
         for (var script of document.querySelectorAll('script[src]')) {
-            if(script.src?.endsWith(path)){
-                script.src = "";
-                script.src = path;
+            if(script.src?.split("?")[0].endsWith(path)){
+                script.src = path + "?t=" + new Date().getTime();
             }
         }
     } else if (path.endsWith(".css")) {
         for (var style of document.querySelectorAll('link[rel="stylesheet"]')) {
-            if(style.href?.endsWith(path)){
-                style.href = "";
-                style.href = path;
+            if(style.href?.split("?")[0].endsWith(path)){
+                style.href = path + "?t=" + new Date().getTime();
             }
         }
     }
