@@ -6,6 +6,7 @@ members = [
     "examples/simple",
     "examples/simple_async",
     "examples/counter_leptos",
+    "examples/counter_yew",
 ]
 
 [workspace.package]

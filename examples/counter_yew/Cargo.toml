@@ -1,0 +1,8 @@
+[package]
+name = "counter_yew"
+version = { workspace = true }
+edition = "2021"
+
+[dependencies]
+wasmdev = { workspace = true }
+yew = { version = "0.20.0", features = ["csr"] }
