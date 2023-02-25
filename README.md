@@ -155,7 +155,6 @@ See `examples` folder for a complete list of examples.
 
 ## TODO:
 
-* On release build, remove files in target/dist that no longer exists in static asset folder
 * Unit tests
 * Docs
 * More examples for popular web projects (yew, sycamore, etc).

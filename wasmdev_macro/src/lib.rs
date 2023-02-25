@@ -3,6 +3,8 @@ use proc_macro2::{TokenStream as TokenStream2, TokenTree};
 use quote::quote;
 use std::env;
 
+mod util;
+
 #[derive(Debug, Default)]
 struct Config {
     port: u16,
@@ -160,6 +162,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
 
     let invalidate_static_asset_cache = if build_wasm_now {
         use std::fs;
+        use std::collections::HashSet;
         use std::path::Path;
         use std::str::from_utf8;
         use wasmdev_server::utils::{build_wasm, minify_javascript, load_file, find_files};
@@ -185,8 +188,31 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
     
             let file_paths = find_files(Path::new(&proj_server_path));
             let file_path_iter = file_paths.iter()
-                .filter_map(|file_path| file_path.to_str())
-                .filter(|file_path| !file_path.ends_with("/index.html")); // index.html already handled.
+                .filter_map(|p| p.to_str())
+                .filter(|p| !p.ends_with(".rs"))          // Don't export src files.
+                .filter(|p| !p.ends_with("/index.html")); // index.html already handled.
+
+            // Clean up old files that were removed since last build:
+            {
+                let old_files = find_files(Path::new(&dist_path));
+                let mut old_file_paths: HashSet<_> = old_files.iter()
+                    .filter_map(|p| p.to_str())
+                    .map(|p| p.to_string().replace(dist_path, ""))
+                    .filter(|p| !p.ends_with("/index.wasm"))
+                    .filter(|p| !p.ends_with("/index.js"))
+                    .filter(|p| !p.ends_with("/index.html"))
+                    .collect();
+    
+                for file_path in file_path_iter.clone() {
+                    old_file_paths.remove(&file_path.replace(&proj_server_path, ""));
+                }
+                let files_to_remove = old_file_paths.iter().map(|p| format!("{dist_path}{p}"));
+                for file_path in files_to_remove {
+                    fs::remove_file(file_path)?;
+                }
+                util::remove_empty_dirs(Path::new(dist_path))?;
+            }
+
             for file_path in file_path_iter {
                 let file_contents = fs::read(file_path)?;
                 let file_contents = if file_path.ends_with(".js") { 
@@ -200,7 +226,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
             }
             // Abuse "include_bytes" to make sure static web assets invalidate cargo build cache
             let invalidate_static_asset_cache = file_paths.iter()
-                .map(|p| p.display().to_string())
+                .filter_map(|p| p.to_str())
                 .filter(|p| !p.ends_with(".rs"))
                 .map(|p| format!("include_bytes!(\"{}\"); ", p))
                 .collect::<Vec<_>>().join("").as_str().parse().unwrap();
