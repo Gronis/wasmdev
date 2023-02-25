@@ -88,7 +88,7 @@ Project file-tree:
     └── main.rs
 ```
 ## Use-case: override asset path:
-If you want to have a separate path to static assets, they can be specified in the `wasmdev::main` macro as mention previously. This is recommended, since the web-server won't try to recompile your wasm-code when you change your static assets like css styles.
+If you want to have a separate path to static assets, they can be specified in the `wasmdev::main` macro as mention previously. This is recommended, since the web-server won't try to recompile your wasm-code when you change your static assets.
 ```rust
 // src/main.rs
 #[wasmdev::main(path: "www")]
@@ -142,7 +142,7 @@ Changing any rust file in src directory, or pre-existing static asset fixes this
 All examples can be built and executed by cargo like this:
 ```bash
 cargo run -p <example>
-# Run the simple project that outputs "Hello World" in the web-browser implemented with web_sys bindings:
+# Run the simple project that outputs "Hello World"
 cargo run -p simple
 ```
 See `examples` folder for a complete list of examples.
@@ -155,7 +155,7 @@ See `examples` folder for a complete list of examples.
 
 ## TODO:
 
-* On release build, remove files that no longer exists in static asset folder
+* On release build, remove files in target/dist that no longer exists in static asset folder
 * Unit tests
 * Docs
 * More examples for popular web projects (yew, sycamore, etc).
