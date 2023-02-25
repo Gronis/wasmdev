@@ -41,7 +41,7 @@ wasmdev aims to provide the most simple way to develop your frontend web applica
 **Note:** The server application that is used to run and test your web frontend app is NOT suitable for hosting your web-app in a production environment. It lacks many common http server features and is only intended to be a fast and simple way to test and develop your web frontend app.
 
 # Features
-## What wasmdev **DO**:
+### What wasmdev **DO**:
 wasmdev has similar features as `trunk`. Like:
 * Auto-recompile and reload on rust/wasm on code changes
 * Hot-reload on static file changes
@@ -51,10 +51,11 @@ It also has some features that `trunk` don't have (I believe), like:
     * Run `cargo build --release` and you have your dist-optimized assets
 * Auto-setup of `console_error_panic_hook` in your frontend app (can be disabled)
 
-## What wasmdev **DOESN'T DO**:
+### What wasmdev **DOESN'T DO**:
 * Server side rendering
 * Transpilation of javascript to adhere to a certain ECMAScript version
 * Bundle multiple javascript files together
+* No `sass` or `less`. Might be implemented in the future as optional features
 
 # Configuration
 
@@ -74,7 +75,6 @@ fn main() {
 
 By default, all files in `src` folder is served by the web server. You can add an `index.html` file here to override the minimalistic default one:
 ```
-my-web-app
 ├── Cargo.lock
 ├── Cargo.toml
 └── src
@@ -95,7 +95,6 @@ fn main() {
 ```
 Project file tree:
 ```
-my-web-app
 ├── Cargo.toml
 ├── src
 │   └── main.rs
@@ -117,16 +116,13 @@ When building your project with a release build, the web assets (all javascript 
 cargo build --release
 ```
 ```
-   Compiling wasmdev_macro
-   Compiling wasmdev
-   Compiling my-web-app
-    Finished release [optimized] target(s)
-    Finished release artifacts in: 'target/dist/my-web-app'
-    Finished release [optimized] target(s)
+Compiling my-web-app
+ Finished release [optimized] target(s)
+ Finished release artifacts in: 'target/dist/my-web-app'
+ Finished release [optimized] target(s)
 ```
 The release artifacts will be located at `target/dist/{project_name}`
 ```
-my-web-app
 └── target
     └── dist
         └── my-web-app
@@ -139,7 +135,7 @@ When building in release mode, cache invalidation of build artifacts might not a
 
 Changing any rust file in src directory, or pre-existing static asset fixes this. 
 
-# Running examples
+# Code examples
 
 All examples can be built and executed by cargo like this:
 ```bash
@@ -149,17 +145,15 @@ cargo run -p simple
 ```
 See `examples` folder for a complete list of examples.
 
+## License
+* MIT
+
+## Contributors:
+* Robin Grönberg
+
 ## TODO:
-Missing features that will or might be added in the future:
 
 * Unit tests
 * Docs
 * More examples for popular web projects (yew, sycamore, etc).
 * Implement an easy way to run all tests (in the browser) by simply running `cargo test` with the test result in the cli window. Not sure if this is possible.
-
-## License
-MIT
-
-## Contributors:
-
-* Robin Grönberg
