@@ -1,0 +1,8 @@
+[package]
+name = "counter_sauron"
+version = { workspace = true }
+edition = "2021"
+
+[dependencies]
+sauron = "0.51.0"
+wasmdev =    { workspace = true }

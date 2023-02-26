@@ -3,10 +3,12 @@ members = [
     "wasmdev",
     "wasmdev_macro",
     "wasmdev_server",
+    "examples/counter_leptos",
+    "examples/counter_sauron",
+    "examples/counter_sycamore",
+    "examples/counter_yew",
     "examples/simple",
     "examples/simple_async",
-    "examples/counter_leptos",
-    "examples/counter_yew",
 ]
 
 [workspace.package]

@@ -1,0 +1,8 @@
+[package]
+name = "counter_sycamore"
+version = { workspace = true }
+edition = "2021"
+
+[dependencies]
+wasmdev = { workspace = true }
+sycamore = { version = "0.8.2" }
