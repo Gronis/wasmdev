@@ -48,11 +48,14 @@ pub struct EndpointBuilder<'a, T> {
 }
 
 fn simple_hash(bin: &Vec<u8>) -> u32 {
+    let mut a = 1u32;
+    let mut b = 1u32;
     let mut res = 0u32;
-    let mut index = 0u32;
     for byte in bin {
-        res ^= (*byte as u32) << index;
-        index = (index + 8) % 32;
+        let ab = a.wrapping_add(b);
+        res = res.wrapping_add((*byte as u32).wrapping_mul(ab));
+        a = b;
+        b = ab;
     }
     res
 }
