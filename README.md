@@ -156,7 +156,5 @@ See `examples` folder for a complete list of examples.
 
 ## TODO:
 
-* Unit tests
-* Docs
-* More examples for popular web projects (yew, sycamore, etc).
+* Write unit tests
 * Implement an easy way to run all tests (in the browser) by simply running `cargo test` with the test result in the cli window. Not sure if this is possible.
