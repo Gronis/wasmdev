@@ -29,7 +29,8 @@ struct Config {
 /// * **addr** (optional): Specify address to webserver (Default "127.0.0.1")
 /// * **path** (optional): Specify path to static web assets (Default: "src")
 /// * **port** (optional): Specify which TCP-port to use (Default: 8080)
-/// Usage:
+/// 
+/// ### Usage
 /// ```rust
 /// // src/main.rs
 /// #[wasmdev::main]
@@ -67,6 +68,14 @@ struct Config {
 /// │   └── main.rs
 /// └── www
 ///     └── index.html
+/// ```
+/// ### Allow external devices to run app
+/// ```rust
+/// // This allows all traffic through the firewall, use with extreme care
+/// #[wasmdev::main(addr: "0.0.0.0")]
+/// fn main() { 
+///   // ...
+/// }
 /// ```
 #[proc_macro_attribute]
 pub fn main(attrs: OGTokenStream, main_fn: OGTokenStream) -> OGTokenStream {
