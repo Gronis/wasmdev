@@ -1,7 +1,11 @@
-use proc_macro::TokenStream as OGTokenStream;
+use proc_macro::TokenStream as BuiltInTokenStream;
 use proc_macro2::{TokenStream, TokenTree, Literal, Punct, Spacing, Ident, Group, Delimiter, Span};
 use quote::quote;
-use std::env;
+use std::{env, fs};
+use std::collections::HashSet;
+use std::path::Path;
+use std::str::from_utf8;
+use wasmdev_server::utils::{build_wasm, minify_javascript, load_file, find_files};
 
 mod util;
 
@@ -20,15 +24,22 @@ struct Config {
     port: Attr<u16>,
     path: Attr<String>,
     addr: Attr<String>,
+    watch: Attr<bool>,
 }
 
 ///
-/// Turns the main function for non-`wasm` targets into a hot-reload development web-server.
+/// Turns the main function for non-`wasm` targets into a development web-server.
 /// 
 /// ### Arguments
-/// * **addr** (optional): Specify address to webserver (Default "127.0.0.1")
-/// * **path** (optional): Specify path to static web assets (Default: "src")
-/// * **port** (optional): Specify which TCP-port to use (Default: 8080)
+/// * **addr** (optional): Socket address to webserver 
+///   - Default "127.0.0.1"
+/// * **path** (optional): Path to static web assets 
+///   - Default: "src"
+/// * **port** (optional): TCP socket port to use 
+///   - Default: 8080
+/// * **watch** (optional): Reload assets on file-system changes
+///   - Default: true
+///   - Note: **Only affects debug build**, always false for release build
 /// 
 /// ### Usage
 /// ```rust
@@ -44,21 +55,15 @@ struct Config {
 /// }
 /// 
 /// ```
-/// 
-/// ### Manually specifying port
-/// ```rust
-/// #[wasmdev::main(port: 3000)]
-/// fn main() { 
-///   // ...
-/// }
-/// 
+/// From terminal:
+/// ```bash
+/// cargo run # No extra targets or tools required
 /// ```
-/// 
-/// ### Manually specifying static asset directory
+/// ### Example: Manually specifying static asset directory
 /// ```rust
 /// #[wasmdev::main(path: "www")]
-/// fn main() { 
-///   // ...
+/// fn main() {
+/// // ...
 /// }
 /// ```
 /// File tree:
@@ -69,17 +74,17 @@ struct Config {
 /// └── www
 ///     └── index.html
 /// ```
-/// ### Allow external devices to run app
+/// ### Example: Allow external devices to run app
 /// ```rust
 /// // This allows all traffic through the firewall, use with extreme care
 /// #[wasmdev::main(addr: "0.0.0.0")]
-/// fn main() { 
-///   // ...
+/// fn main() {
+/// // ...
 /// }
 /// ```
+/// 
 #[proc_macro_attribute]
-pub fn main(attrs: OGTokenStream, main_fn: OGTokenStream) -> OGTokenStream {
-
+pub fn main(attrs: BuiltInTokenStream, main_fn: BuiltInTokenStream) -> BuiltInTokenStream {
     match (|| -> Result<TokenStream, TokenStream> {
         let wasm_fn: TokenStream  = main_fn.into();
         let config                = parse_config_attrs(attrs.into())?;
@@ -152,20 +157,21 @@ fn parse_config_attrs(attrs: TokenStream) -> Result<Config, TokenStream> {
     let mut port = None;
     let mut path = None;
     let mut addr = None;
+    let mut watch = None;
 
-    struct ParseError;
-
-    let literal_to_string = |value: &Literal| -> Result<String, ParseError> {
-        let value = value.to_string();
+    struct NoQuotesError;
+    let trim_quotes = |value: &str| -> Result<String, NoQuotesError> {
         if value.as_bytes()[0] != ('"' as u8) || value.as_bytes()[value.as_bytes().len() - 1] != ('"' as u8) { 
-            return Err(ParseError);
+            return Err(NoQuotesError);
         }
         Ok(value[1..value.len() - 1].to_string())
     };
 
     loop {
         
-        let Some(TokenTree::Ident(ident)) = it.next() else { break };
+        let Some(TokenTree::Ident(ident)) = it.next() else { 
+            break
+        };
         let Some(TokenTree::Punct(punct)) = it.next() else { 
             return compiler_error!(ident, "Incomplete attribute list, expected '=' or ':' after '{ident}'")
         };
@@ -179,31 +185,39 @@ fn parse_config_attrs(attrs: TokenStream) -> Result<Config, TokenStream> {
         let Some(value) = it.next() else { 
             return compiler_error!(punct, "Incomplete attribute list, expected value after '{punct}'")
         };
-        let TokenTree::Literal(value) = value else {
-            return compiler_error!(value, "Unexpected value: '{value}'. help: Try wrapping {value} in quotes: \"{value}\"")
+        let value_as_str = match &value {
+            TokenTree::Literal(value) => value.to_string(),
+            TokenTree::Ident(value) => value.to_string(),
+            _ => return compiler_error!(value, "Unexpected token: '{value}'"),
         };
 
         match ident.to_string().as_str() {
-            "port" => { 
-                let Ok(p) = value.to_string().parse() else { 
-                    return compiler_error!(value, "Unable to parse port, {value} is not a u16");
-                };
-                port = Some(Attr::new(p, Some(value.into())));
-            },
-            "path" => { 
-                let Ok(p) = literal_to_string(&value) else {
-                    return compiler_error!(value, "Unable to parse path, {value} is not a `&str`");
-                };
-                path = Some(Attr::new(p, Some(value.into())));
-            },
             "addr" => { 
-                let Ok(a) = literal_to_string(&value) else {
+                let Ok(val) = trim_quotes(&value_as_str) else {
                     return compiler_error!(value, "Unable to parse addr, {value} is not a `&str`");                    
                 };
-                addr = Some(Attr::new(a, Some(value.into())));
+                addr = Some(Attr::new(val, Some(value.into())));
             },
+            "path" => { 
+                let Ok(val) = trim_quotes(&value_as_str) else {
+                    return compiler_error!(value, "Unable to parse path, {value} is not a `&str`");
+                };
+                path = Some(Attr::new(val, Some(value.into())));
+            },
+            "port" => { 
+                let Ok(val) = value_as_str.parse() else { 
+                    return compiler_error!(value, "Unable to parse port, {value} is not a u16");
+                };
+                port = Some(Attr::new(val, Some(value.into())));
+            },
+            "watch" => {
+                let Ok(val) = value_as_str.parse() else { 
+                    return compiler_error!(value, "Unable to parse watch, {value} is not boolean");
+                };
+                watch = Some(Attr::new(val, Some(value.into())));
+            }
             i  => { 
-                return compiler_error!(ident, "Unknown attribute: '{i}', help: available attributes are: 'addr', 'path' and 'port'");
+                return compiler_error!(ident, "Unknown attribute: '{i}', help: available attributes are: 'addr', 'path', 'port' and watch");
             },
         }
 
@@ -217,6 +231,7 @@ fn parse_config_attrs(attrs: TokenStream) -> Result<Config, TokenStream> {
         port: port.unwrap_or(Attr::new(8080, None)), 
         path: path.unwrap_or(Attr::new("src".into(), None)), 
         addr: addr.unwrap_or(Attr::new("127.0.0.1".into(), None)),
+        watch: watch.unwrap_or(Attr::new(true, None)),
     })
 }
 
@@ -253,10 +268,11 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: Config) -> Result<Tok
         return compiler_error!("Cargo did not set env var: CARGO_PKG_NAME");
     };
 
+    let is_release       = !cfg!(debug_assertions);
     let server_port      = config.port.value;
     let server_path      = config.path.value;
     let server_addr      = config.addr.value;
-    let is_release       = !cfg!(debug_assertions);
+    let server_watch     = config.watch.value && !is_release;
     let index_js         = include_str!("index.js");
     let index_html       = include_str!("index.html");
     let release_mode     = if is_release {"release"} else {"debug"};
@@ -283,13 +299,8 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: Config) -> Result<Tok
         return compiler_error!(span, "Error: {} is not a valid ipv4 or ipv6 address", &server_addr);
     };
 
-    // Build project as wasm target during the build step (if release mode)
+    // Build project as wasm target during the build step (if building in release mode)
     let tt_invalidate_static_asset_cache = if build_wasm_now {
-        use std::fs;
-        use std::collections::HashSet;
-        use std::path::Path;
-        use std::str::from_utf8;
-        use wasmdev_server::utils::{build_wasm, minify_javascript, load_file, find_files};
         let Some(_)         = build_wasm(wasm_path.as_str(), is_release, target_path.as_str())
                               else { return compiler_error!("Failed to build wasm target") };
         let Some(wasm_code) = load_file(Path::new(index_wasm_path.as_str()))
@@ -390,6 +401,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: Config) -> Result<Tok
                 let proj_src_path    = #proj_src_path;
                 let server_addr      = #server_addr;
                 let server_port      = #server_port;
+                let server_watch     = #server_watch;
 
                 let server = Server::new();
                 {
@@ -497,14 +509,14 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: Config) -> Result<Tok
                 load_and_serve_index_html();
                 build_load_and_serve_app();
 
-                let _watchers = if #is_release {None} else {Some((
+                let _watchers = if server_watch { Some((
                     make_watcher(Path::new(proj_server_path), load_and_serve_file)
                         .expect("Unable to watch static files folder, required for hot-reload when updated."),
                     make_watcher(Path::new(proj_src_path), move |_| { build_load_and_serve_app(); })
                         .expect("Unable to watch src folder, required for hot-reload."),
                     make_watcher(Path::new(proj_html_path), move |_| load_and_serve_index_html()),
                         // Providing a custom index.html is optional, so open watcher is allowed to fail silently here.
-                ))};
+                ))} else { None };
 
                 let addr = format!("{}:{}", server_addr, server_port);
                 let Ok(tcp_socket) = TcpListener::bind(addr) else { 
