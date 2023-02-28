@@ -1,33 +1,34 @@
-use proc_macro::TokenStream;
-use proc_macro2::{TokenStream as TokenStream2, TokenTree, Literal, Punct, Spacing, Ident, Group, Delimiter, Span};
+use proc_macro::TokenStream as OGTokenStream;
+use proc_macro2::{TokenStream, TokenTree, Literal, Punct, Spacing, Ident, Group, Delimiter, Span};
 use quote::quote;
 use std::env;
 
 mod util;
 
-#[derive(Debug)]
-struct Config {
-    port: u16,
-    path: String,
-    addr: String,
+struct Attr<T> {
+    value: T,
+    tt: Option<TokenTree>,
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Config {
-            port: 8080,
-            path: "src".into(),
-            addr: "127.0.0.1".into(),
-        }
+impl <T> Attr<T> {
+    fn new(value: T, tt: Option<TokenTree>) -> Self {
+        Attr{ value, tt }
     }
+}
+
+struct Config {
+    port: Attr<u16>,
+    path: Attr<String>,
+    addr: Attr<String>,
 }
 
 ///
 /// Turns the main function for non-`wasm` targets into a hot-reload development web-server.
 /// 
 /// ### Arguments
-/// * **port** (optional): Specify which TCP-port to use (Default: 8080)
+/// * **addr** (optional): Specify address to webserver (Default "127.0.0.1")
 /// * **path** (optional): Specify path to static web assets (Default: "src")
+/// * **port** (optional): Specify which TCP-port to use (Default: 8080)
 /// Usage:
 /// ```rust
 /// // src/main.rs
@@ -68,28 +69,29 @@ impl Default for Config {
 ///     └── index.html
 /// ```
 #[proc_macro_attribute]
-pub fn main(attrs: TokenStream, main_fn: TokenStream) -> TokenStream {
+pub fn main(attrs: OGTokenStream, main_fn: OGTokenStream) -> OGTokenStream {
 
-    let config = match parse_config_attrs(attrs.into()) { 
-        Ok(config) => config, 
-        Err(ts) => return ts.into()
-    };
-
-    let wasm_fn: TokenStream2 = main_fn.into();
-    let wasm_main_fn          = make_wasm_main_fn(&wasm_fn);
-    let server_main_fn        = make_server_main_fn(&wasm_fn, config);
-
-    quote! {
-        #[cfg(not(target_family = "wasm"))]
-        #server_main_fn
-        #[cfg(target_family = "wasm")]
-        #wasm_main_fn
+    match (|| -> Result<TokenStream, TokenStream> {
+        let wasm_fn: TokenStream  = main_fn.into();
+        let config                = parse_config_attrs(attrs.into())?;
+        let wasm_main_fn          = make_wasm_main_fn(&wasm_fn)?;
+        let server_main_fn        = make_server_main_fn(&wasm_fn, config)?;
+    
+        Ok(quote! {
+            #[cfg(not(target_family = "wasm"))]
+            #server_main_fn
+            #[cfg(target_family = "wasm")]
+            #wasm_main_fn
+        })  
+    })() {
+        Ok(tt) => tt,
+        Err(tt) => tt,
     }.into()
 }
 
-fn emit_compilation_error(msg: &str, span: &Span) -> TokenStream2 {
+fn emit_compilation_error(msg: &str, span: &Span) -> TokenStream {
     let span = span.clone();
-    TokenStream2::from_iter(vec![
+    TokenStream::from_iter(vec![
         TokenTree::Ident(Ident::new("compile_error", span)),
         TokenTree::Punct({
             let mut punct = Punct::new('!', Spacing::Alone);
@@ -98,7 +100,7 @@ fn emit_compilation_error(msg: &str, span: &Span) -> TokenStream2 {
         }),
         TokenTree::Group({
             let mut group = Group::new(Delimiter::Brace, {
-                TokenStream2::from_iter(vec![TokenTree::Literal({
+                TokenStream::from_iter(vec![TokenTree::Literal({
                     let mut string = Literal::string(msg);
                     string.set_span(span);
                     string
@@ -110,25 +112,35 @@ fn emit_compilation_error(msg: &str, span: &Span) -> TokenStream2 {
     ])
 }
 
+/// This trait is only here so that "compiler_error" macro works for both TokenTrees and Spans.
+trait IntoSpanSelf {
+    fn span(self) -> Span;
+}
+
+impl IntoSpanSelf for Span {
+    fn span(self) -> Span {
+        self
+    }
+}
+
 macro_rules! compiler_error { 
-    ($i:ident, $($args:tt)*) => { 
+    ( $i:ident, $($args:tt)* ) => { 
         {
             let span = ($i).span();
             Err(emit_compilation_error(&format!($($args)*), &span))
         }
     };
-    ( $($args:tt)*) => { 
+    ( $($args:tt)* ) => { 
         {
             let span = Span::call_site();
             Err(emit_compilation_error(&format!($($args)*), &span))
         }
     };
 }
-// Err(emit_compilation_error(&format!(msg), span)
 
-fn parse_config_attrs(attrs: TokenStream2) -> Result<Config, TokenStream2> {
+fn parse_config_attrs(attrs: TokenStream) -> Result<Config, TokenStream> {
     let mut it = attrs.into_iter();
-    let mut port: u16 = 8080;
+    let mut port = None;
     let mut path = None;
     let mut addr = None;
 
@@ -164,22 +176,22 @@ fn parse_config_attrs(attrs: TokenStream2) -> Result<Config, TokenStream2> {
                 let Ok(p) = value.to_string().parse() else { 
                     return compiler_error!(value, "Unable to parse port, {value} is not a u16");
                 };
-                port = p;
+                port = Some(Attr::new(p, Some(value.into())));
             },
             "path" => { 
                 let Ok(p) = literal_to_string(&value) else {
                     return compiler_error!(value, "Unable to parse path, {value} is not a `&str`");
                 };
-                path = Some(p);
+                path = Some(Attr::new(p, Some(value.into())));
             },
             "addr" => { 
                 let Ok(a) = literal_to_string(&value) else {
                     return compiler_error!(value, "Unable to parse addr, {value} is not a `&str`");                    
                 };
-                addr = Some(a);
+                addr = Some(Attr::new(a, Some(value.into())));
             },
             i  => { 
-                return compiler_error!(ident, "Unknown attribute: '{i}', Tip: possible attributes in {:?}", Config::default());
+                return compiler_error!(ident, "Unknown attribute: '{i}', Tip: available attributes are: 'addr', 'path' and 'port'");
             },
         }
 
@@ -190,13 +202,13 @@ fn parse_config_attrs(attrs: TokenStream2) -> Result<Config, TokenStream2> {
         }
     };
     Ok(Config { 
-        port, 
-        path: path.unwrap_or(Config::default().path), 
-        addr: addr.unwrap_or(Config::default().addr),
+        port: port.unwrap_or(Attr::new(8080, None)), 
+        path: path.unwrap_or(Attr::new("src".into(), None)), 
+        addr: addr.unwrap_or(Attr::new("127.0.0.1".into(), None)),
     })
 }
 
-fn get_fn_name(func: &TokenStream2) -> Option<TokenTree> {
+fn get_fn_name(func: &TokenStream) -> Option<TokenTree> {
     let mut it = func.clone().into_iter().skip_while(|tt| {
         let TokenTree::Ident(ident) = tt else { return true };
         ident.to_string() != "fn"
@@ -205,29 +217,33 @@ fn get_fn_name(func: &TokenStream2) -> Option<TokenTree> {
     it.next()  // Should be function name identifier
 }
 
-fn make_wasm_main_fn(wasm_main_fn: &TokenStream2) -> TokenStream2 {
-    let wasm_main_fn_ident = get_fn_name(wasm_main_fn)
-        .expect("Unable to get function name of main function");
-    quote! {
+fn make_wasm_main_fn(wasm_main_fn: &TokenStream) -> Result<TokenStream, TokenStream> {
+    let Some(wasm_main_fn_ident) = get_fn_name(wasm_main_fn) else {
+        return compiler_error!("No main function found");
+    };
+    Ok(quote! {
         fn main() {
             #wasm_main_fn
             wasmdev::if_enabled_setup_panic_hook_once();
             #wasm_main_fn_ident ();
         }
-    }
+    })
 }
 
-fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStream2 {
-    let wasm_main_fn_ident = get_fn_name(wasm_main_fn)
-        .expect("Unable to get function name of main function");
-    let proj_dir = env::var("CARGO_MANIFEST_DIR")
-        .expect("Cargo did not set env var: CARGO_MANIFEST_DIR");
-    let proj_name = env::var("CARGO_PKG_NAME")
-        .expect("Cargo did not set env var: CARGO_PKG_NAME");
+fn make_server_main_fn(wasm_main_fn: &TokenStream, config: Config) -> Result<TokenStream, TokenStream> {
+    let Some(wasm_main_fn_ident) = get_fn_name(wasm_main_fn) else {
+        return compiler_error!("No main function found");
+    };
+    let Ok(proj_dir) = env::var("CARGO_MANIFEST_DIR") else {
+        return compiler_error!("Cargo did not set env var: CARGO_MANIFEST_DIR")
+    };
+    let Ok(proj_name) = env::var("CARGO_PKG_NAME") else {
+        return compiler_error!("Cargo did not set env var: CARGO_PKG_NAME");
+    };
 
-    let server_port      = config.port;
-    let server_path      = config.path;
-    let server_addr      = config.addr;
+    let server_port      = config.port.value;
+    let server_path      = config.path.value;
+    let server_addr      = config.addr.value;
     let is_release       = !cfg!(debug_assertions);
     let index_js         = include_str!("index.js");
     let index_html       = include_str!("index.html");
@@ -245,11 +261,15 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
     let build_wasm_now   = env::var("CARGO_WASMDEV").ok().is_none() && is_release;
 
     // Check that server path for static assets exists:
-    let _ = std::fs::metadata(&proj_server_path)
-        .expect(&format!("Error: Unable to read directory: {}", &proj_server_path));
+    let Ok(_) = std::fs::metadata(&proj_server_path) else {
+        let span = config.path.tt.map(|tt| tt.span()).unwrap_or(Span::call_site());
+        return compiler_error!(span, "Error: Unable to read directory: {}", &proj_server_path);
+    };
     // Check that provided ip address is an ip address:
-    let _ = server_addr.parse::<std::net::IpAddr>()
-        .expect(&format!("Error: {} is not a valid ipv4 or ipv6 address", &server_addr));
+    let Ok(_) = server_addr.parse::<std::net::IpAddr>() else {
+        let span = config.addr.tt.map(|tt| tt.span()).unwrap_or(Span::call_site());
+        return compiler_error!(span, "Error: {} is not a valid ipv4 or ipv6 address", &server_addr);
+    };
 
     let invalidate_static_asset_cache = if build_wasm_now {
         use std::fs;
@@ -259,11 +279,11 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
         use wasmdev_server::utils::{build_wasm, minify_javascript, load_file, find_files};
         let dist_path       = &format!("target/dist/{proj_name}");
         let Some(_)         = build_wasm(wasm_path.as_str(), is_release, target_path.as_str())
-            else { panic! ("Failed to build wasm target") };
+                              else { return compiler_error!("Failed to build wasm target") };
         let Some(wasm_code) = load_file(Path::new(index_wasm_path.as_str()))
-            else { panic! ("Failed to read wasm code") };
+                              else { return compiler_error!("Failed to read wasm code") };
         let Some(js_code)   = load_file(Path::new(index_js_path.as_str()))
-            else { panic! ("Failed to read js code")  };
+                              else { return compiler_error!("Failed to read js code")  };
         let js_code         = minify_javascript(&js_code);
         let html_code = (|| -> Option<String>{
             let html_code = load_file(Path::new(proj_html_path.as_str()))?;
@@ -271,7 +291,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
             Some(format!("{}\n<script type=\"module\">{}</script>", html_code, index_js))
         })().unwrap_or(index_html.clone());
 
-        match (|| -> Result<TokenStream2, std::io::Error> {
+        match (|| -> Result<TokenStream, std::io::Error> {
             let _ = fs::create_dir_all(dist_path);
             fs::write(format!("{dist_path}/index.wasm"), wasm_code)?;
             fs::write(format!("{dist_path}/index.js"), js_code)?;
@@ -316,7 +336,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
                 fs::write(file_dist_path, file_contents)?;
             }
             // Abuse "include_bytes" to make sure static web assets invalidate cargo build cache
-            let invalidate_static_asset_cache = TokenStream2::from_iter(file_paths.iter()
+            let invalidate_static_asset_cache = TokenStream::from_iter(file_paths.iter()
                 .filter_map(|p| p.to_str())
                 .filter(|p| !p.ends_with(".rs"))
                 .map(|p| quote!{ include_bytes!(#p); })
@@ -325,11 +345,11 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
             Ok(invalidate_static_asset_cache)
         })() {
             Ok(tt)   => tt,
-            Err(msg) => panic!("Failed to build project '{proj_name}' , {msg}"),
+            Err(msg) => return compiler_error!("Failed to build project '{proj_name}' , {msg}"),
         }
     } else { quote! {} }; // Debug build does not need to invalidate cargo build cache
 
-    quote!{
+    Ok(quote!{
         fn main() {
 
             // Make sure rust analyzer analyze the wasm code for better code-completion experience:
@@ -492,5 +512,5 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream2, config: Config) -> TokenStre
                 };
             }
         }
-    }
+    })
 }
