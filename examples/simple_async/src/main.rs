@@ -7,6 +7,11 @@ async fn make_hello_world_text() -> String {
 // Using both tokio::main and wasmdev::main is no problem
 // We have to use "current_thread" because a browser js env
 // is single threaded
+//
+// Note: This compiles but panics in browser because 
+//   'time not implemented on this platform'. This 
+//   should not happen since we don't include time.
+//   Will have to investigate.
 #[tokio::main(flavor = "current_thread")]
 #[wasmdev::main]
 async fn main() {
