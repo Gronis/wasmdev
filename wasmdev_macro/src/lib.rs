@@ -167,8 +167,11 @@ fn parse_config_attrs(attrs: TokenStream) -> Result<Config, TokenStream> {
             _ => return compiler_error!(punct, "Unexpected character '{punct}'. Expected ':' or '='"),
         };
         
-        let Some(TokenTree::Literal(value)) = it.next() else { 
+        let Some(value) = it.next() else { 
             return compiler_error!(punct, "Incomplete attribute list, expected value after '{punct}'")
+        };
+        let TokenTree::Literal(value) = value else {
+            return compiler_error!(value, "Unexpected value: '{value}'. help: Try wrapping {value} in quotes: \"{value}\"")
         };
 
         match ident.to_string().as_str() {
@@ -191,14 +194,14 @@ fn parse_config_attrs(attrs: TokenStream) -> Result<Config, TokenStream> {
                 addr = Some(Attr::new(a, Some(value.into())));
             },
             i  => { 
-                return compiler_error!(ident, "Unknown attribute: '{i}', Tip: available attributes are: 'addr', 'path' and 'port'");
+                return compiler_error!(ident, "Unknown attribute: '{i}', help: available attributes are: 'addr', 'path' and 'port'");
             },
         }
 
         match it.next() {
             Some(TokenTree::Punct(punct)) if punct.to_string() == "," => (),
             None => (),
-            Some(tt) => return compiler_error!(tt, "Unexpected character '{tt}', Tip: use ',' to separate attributes."),
+            Some(tt) => return compiler_error!(tt, "Unexpected character '{tt}', help: use ',' to separate attributes."),
         }
     };
     Ok(Config { 
@@ -494,13 +497,13 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: Config) -> Result<Tok
                 ))};
                 
                 let addr_char_count = server_addr.chars().into_iter().count();
-                print!("\x1b[1m\x1b[92m            \x1b[0m ┏\x1b[0m━━━━━━━━━");
+                print!("             ┏━━━━━━━━━");
                 for _ in 0..addr_char_count { print!("━") };
-                println!("━━━━━━━\x1b[0m┓");
+                println!("━━━━━━━┓");
                 println!("\x1b[1m\x1b[92m     Serving\x1b[0m ┃\x1b[1m  http://{}:{} \x1b[0m┃ <= Click to open your app! ", server_addr, format!("{: <5}", server_port));
-                print!("\x1b[1m\x1b[92m            \x1b[0m ┗\x1b[0m━━━━━━━━━");
+                print!("             ┗━━━━━━━━━");
                 for _ in 0..addr_char_count { print!("━") };
-                println!("━━━━━━━\x1b[0m┛");
+                println!("━━━━━━━┛");
                 
                 // let addr = format!("127.0.0.1:{}", server_port);
                 let addr = format!("{}:{}", server_addr, server_port);
