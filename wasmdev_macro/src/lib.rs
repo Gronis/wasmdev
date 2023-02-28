@@ -274,20 +274,21 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: Config) -> Result<Tok
         return compiler_error!(span, "Error: {} is not a valid ipv4 or ipv6 address", &server_addr);
     };
 
-    let invalidate_static_asset_cache = if build_wasm_now {
+    // Build project as wasm target during the build step (if release mode)
+    let tt_invalidate_static_asset_cache = if build_wasm_now {
         use std::fs;
         use std::collections::HashSet;
         use std::path::Path;
         use std::str::from_utf8;
         use wasmdev_server::utils::{build_wasm, minify_javascript, load_file, find_files};
-        let dist_path       = &format!("target/dist/{proj_name}");
         let Some(_)         = build_wasm(wasm_path.as_str(), is_release, target_path.as_str())
                               else { return compiler_error!("Failed to build wasm target") };
         let Some(wasm_code) = load_file(Path::new(index_wasm_path.as_str()))
-                              else { return compiler_error!("Failed to read wasm code") };
+                              else { return compiler_error!("Failed to read wasm code from {index_wasm_path}") };
         let Some(js_code)   = load_file(Path::new(index_js_path.as_str()))
-                              else { return compiler_error!("Failed to read js code")  };
+                              else { return compiler_error!("Failed to read js code from {index_js_path}") };
         let js_code         = minify_javascript(&js_code);
+        let dist_path       = &format!("target/dist/{proj_name}");
         let html_code = (|| -> Option<String>{
             let html_code = load_file(Path::new(proj_html_path.as_str()))?;
             let html_code = from_utf8(&html_code).ok()?;
@@ -339,13 +340,13 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: Config) -> Result<Tok
                 fs::write(file_dist_path, file_contents)?;
             }
             // Abuse "include_bytes" to make sure static web assets invalidate cargo build cache
-            let invalidate_static_asset_cache = TokenStream::from_iter(file_paths.iter()
+            let tt_invalidate_static_asset_cache = TokenStream::from_iter(file_paths.iter()
                 .filter_map(|p| p.to_str())
                 .filter(|p| !p.ends_with(".rs"))
                 .map(|p| quote!{ include_bytes!(#p); })
             );
             eprintln!("\x1b[1m\x1b[92m    Finished\x1b[0m release artifacts in: '{dist_path}'");
-            Ok(invalidate_static_asset_cache)
+            Ok(tt_invalidate_static_asset_cache)
         })() {
             Ok(tt)   => tt,
             Err(msg) => return compiler_error!("Failed to build project '{proj_name}' , {msg}"),
@@ -368,7 +369,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: Config) -> Result<Tok
                 use wasmdev::utils::{build_wasm, load_file, minify_javascript, make_watcher, find_files, Result, Event};
 
                 // Make sure that release build includes the latest versions of static assets:
-                #invalidate_static_asset_cache
+                #tt_invalidate_static_asset_cache
                 // Make sure main is referenced to avoid "unused" compiler warnings:
                 #wasm_main_fn_ident;
 
@@ -495,22 +496,25 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: Config) -> Result<Tok
                     make_watcher(Path::new(proj_html_path), move |_| load_and_serve_index_html()),
                         // Providing a custom index.html is optional, so open watcher is allowed to fail silently here.
                 ))};
-                
-                let addr_char_count = server_addr.chars().into_iter().count();
-                print!("             ┏━━━━━━━━━");
-                for _ in 0..addr_char_count { print!("━") };
-                println!("━━━━━━━┓");
-                println!("\x1b[1m\x1b[92m     Serving\x1b[0m ┃\x1b[1m  http://{}:{} \x1b[0m┃ <= Click to open your app! ", server_addr, format!("{: <5}", server_port));
-                print!("             ┗━━━━━━━━━");
-                for _ in 0..addr_char_count { print!("━") };
-                println!("━━━━━━━┛");
-                
-                // let addr = format!("127.0.0.1:{}", server_port);
+
                 let addr = format!("{}:{}", server_addr, server_port);
-                let Some(tcp_socket) = TcpListener::bind(addr).ok() else { 
+                let Ok(tcp_socket) = TcpListener::bind(addr) else { 
                     panic!("Unable to bind tcp port: {}", server_port)
                 };
-                let Some(()) = server.listen(tcp_socket).ok() else { 
+                let Ok(addr) = tcp_socket.local_addr() else {
+                    panic!("Unable to get local socket address.")
+                };
+
+                let addr_char_count = addr.to_string().chars().into_iter().count();
+                print!("             ┏━━━━━━━━");
+                for _ in 0..addr_char_count { print!("━") };
+                println!("━┓");
+                println!("\x1b[1m\x1b[92m     Serving\x1b[0m ┃\x1b[1m http://{} \x1b[0m┃ <= Click to open your app! ", addr);
+                print!("             ┗━━━━━━━━");
+                for _ in 0..addr_char_count { print!("━") };
+                println!("━┛");
+
+                let Ok(()) = server.listen(tcp_socket) else { 
                     panic!("Unable to handle incomming connection")
                 };
             }
