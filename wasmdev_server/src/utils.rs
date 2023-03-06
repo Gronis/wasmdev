@@ -56,12 +56,11 @@ pub fn minify_javascript(code_in: &[u8]) -> Vec<u8>{
 #[cfg(not(target_family = "wasm"))]
 pub fn make_watcher(path: &Path, mut event_handler: impl EventHandler) -> Option<impl Watcher> {
     use notify::{recommended_watcher, RecursiveMode};
-    use notify::event::{EventKind, ModifyKind};
+    use notify::event::EventKind;
 
     let mut watcher = recommended_watcher(move |e: Result<Event>| -> () {
-        let Ok(event)                 = &e           else { return };
-        let EventKind::Modify(modify) = &event.kind  else { return };
-        let ModifyKind::Data(_)       = modify       else { return };
+        let Ok(event)            = &e           else { return };
+        let EventKind::Modify(_) = &event.kind  else { return };
         
         event_handler.handle_event(e);
     }).expect("Unable to initiate watcher");

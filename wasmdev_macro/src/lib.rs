@@ -443,11 +443,13 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: Config) -> Result<Tok
                     }
                 };
 
+                let file_path_to_req_path = move |path: &str| path.replace(proj_server_path, "").replace("\\", "/");
+
                 let serve_static_files = || {
                     let file_paths = find_files(Path::new(proj_server_path));
                     let file_and_req_path_iter = file_paths.iter()
                         .filter_map(|file_path| file_path.to_str())
-                        .map(|file_path| (file_path, file_path.replace(proj_server_path, "")))
+                        .map(|file_path| (file_path, file_path_to_req_path(file_path)))
                         .filter(|(_, req_path)| *req_path != "/index.html");
                     {
                         let mut conf = server.config.write().unwrap();
@@ -468,7 +470,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: Config) -> Result<Tok
                         let Some(event) = event.ok() else { return };
                         for file_path in event.paths {
                             let file_path = file_path.as_path();
-                            let Some(req_path) = file_path.to_str().map(|path| path.replace(proj_server_path, "")) else { continue };
+                            let Some(req_path) = file_path.to_str().map(file_path_to_req_path) else { continue };
                             if req_path == "/index.html" { continue }; // index.html is handled in another watcher, so skip it.
                             let Some(file_contents) = load_file(file_path) else { continue };
                             let file_did_update = {
