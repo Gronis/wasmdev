@@ -12,7 +12,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.5"
+version = "0.1.6"
 
 [profile.release]
 opt-level = 'z'
@@ -21,6 +21,6 @@ opt-level = 'z'
 opt-level = 3
 
 [workspace.dependencies]
-wasmdev        = { version = "0.1.5", path = "./wasmdev" }
-wasmdev_macro  = { version = "0.1.5", path = "./wasmdev_macro" }
-wasmdev_server = { version = "0.1.5", path = "./wasmdev_server" }
+wasmdev        = { version = "0.1.6", path = "./wasmdev" }
+wasmdev_macro  = { version = "0.1.6", path = "./wasmdev_macro" }
+wasmdev_server = { version = "0.1.6", path = "./wasmdev_server" }
