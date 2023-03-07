@@ -7,7 +7,7 @@ use std::path::Path;
 use std::sync::{Arc, RwLock};
 use std::thread;
 
-use crate::utils::{defer, load_file};
+use crate::utils::{defer, load_file, simple_hash};
 
 use super::{Header, StatusCode};
 use super::helper::*;
@@ -45,19 +45,6 @@ pub struct EndpointBuilder<'a, T> {
     path: &'a str,
     endpoint: Endpoint,
     _marker: PhantomData<T> 
-}
-
-fn simple_hash(bin: &Vec<u8>) -> u32 {
-    let mut a = 1u32;
-    let mut b = 1u32;
-    let mut res = 0u32;
-    for byte in bin {
-        let ab = a.wrapping_add(b);
-        res = res.wrapping_add((*byte as u32).wrapping_mul(ab));
-        a = b;
-        b = ab;
-    }
-    res
 }
 
 impl <'a, T> EndpointBuilderHasResponse for EndpointBuilder<'a, T> {
