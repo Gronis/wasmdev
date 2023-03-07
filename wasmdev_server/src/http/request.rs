@@ -21,7 +21,7 @@ impl FromStr for RequestType{
     type Err = ParseError;
     #[inline]
     fn from_str(s: &str) -> Result<RequestType, ParseError> {
-        match s {
+        match s.to_ascii_uppercase().as_str() {
             "GET" => Ok(RequestType::GET),
             "PUT" => Ok(RequestType::PUT),
             "POST" => Ok(RequestType::POST),

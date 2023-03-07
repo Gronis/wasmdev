@@ -17,7 +17,7 @@ impl FromStr for Version{
     type Err = ParseError;
     #[inline]
     fn from_str(s: &str) -> Result<Version, ParseError> {
-        match s {
+        match s.to_ascii_uppercase().as_str() {
             "HTTP/1.0" => Ok(Version::V1_0),
             "HTTP/1.1" => Ok(Version::V1_1),
             _ => Err(ParseError)

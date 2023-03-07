@@ -9,7 +9,6 @@ use super::{Request, Response, Header, Version, StatusCode};
 
 pub fn is_valid_websocket(request: &Request) -> bool {
     request.headers().any(|h| matches!(h, Header::Connection(header) if header == "Upgrade")) && 
-    request.headers().any(|h| matches!(h, Header::Upgrade(header) if header == "websocket")) && 
     request.headers().any(|h| matches!(h, Header::SecWebSocketVersion(13))) && 
     request.headers().any(|h| matches!(h, Header::SecWebSocketKey(_)))
 }

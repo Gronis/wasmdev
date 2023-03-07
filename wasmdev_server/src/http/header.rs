@@ -49,16 +49,16 @@ impl FromStr for Header{
         let (header, value) = s.split_at(s.find(':').ok_or(ParseError)?);
         let value = &value[1..].trim();
         let parse_version = |v : &str | v.parse::<i32>().or(Err(ParseError));
-        match header {
-            "Host" => Ok(Header::host(value)),
-            "Connection" => Ok(Header::connection(value)),
-            "Upgrade" => Ok(Header::upgrade(value)),
-            "Sec-WebSocket-Key" => Ok(Header::sec_websocket_key(value)),
-            "Sec-WebSocket-Version" => Ok(Header::sec_websocket_version(parse_version(value)?)),
-            "Sec-WebSocket-Extensions" => Ok(Header::sec_websocket_extensions(value)),
-            "Sec-WebSocket-Accept" => Ok(Header::sec_websocket_accept(value)),
-            "Content-Length" => Ok(Header::content_length(value)?),
-            "Content-Type" => todo!(),
+        match header.to_ascii_lowercase().as_str() {
+            "host" => Ok(Header::host(value)),
+            "connection" => Ok(Header::connection(value)),
+            "upgrade" => Ok(Header::upgrade(value)),
+            "sec-websocket-key" => Ok(Header::sec_websocket_key(value)),
+            "sec-websocket-version" => Ok(Header::sec_websocket_version(parse_version(value)?)),
+            "sec-websocket-extensions" => Ok(Header::sec_websocket_extensions(value)),
+            "sec-websocket-accept" => Ok(Header::sec_websocket_accept(value)),
+            "content-length" => Ok(Header::content_length(value)?),
+            "content-type" => todo!(),
             _ => Err(ParseError)
         }
     }
