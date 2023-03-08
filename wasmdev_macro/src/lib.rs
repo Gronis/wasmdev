@@ -1,10 +1,7 @@
 use proc_macro::TokenStream as BuiltInTokenStream;
 use proc_macro2::{TokenStream, Span};
 use quote::quote;
-use std::{env, fs};
-use std::collections::HashSet;
-use std::path::Path;
-use std::str::from_utf8;
+use std::env;
 
 mod util;
 mod config;
@@ -101,124 +98,50 @@ fn make_wasm_main_fn(wasm_main_fn: &TokenStream) -> Result<TokenStream, TokenStr
     })
 }
 
-fn make_server_main_fn(wasm_main_fn: &TokenStream, config: Config) -> Result<TokenStream, TokenStream> {
-    // Put non-wasm specific imports here:
-    use wasmdev_core::{build_wasm, minify_javascript, load_file, find_files};
-    
+fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result<TokenStream, TokenStream> {
+    // Fail early if macro is annotated on something that is not a function
     let Some(wasm_main_fn_ident) = get_fn_name(wasm_main_fn) else {
         return compiler_error!("No main function found");
     };
-    let Ok(proj_dir) = env::var("CARGO_MANIFEST_DIR") else {
-        return compiler_error!("Cargo did not set env var: CARGO_MANIFEST_DIR")
-    };
-    let Ok(proj_name) = env::var("CARGO_PKG_NAME") else {
-        return compiler_error!("Cargo did not set env var: CARGO_PKG_NAME");
-    };
 
-    let is_release       = !cfg!(debug_assertions);
-    let server_port      = config.port.value;
-    let server_path      = config.path.value;
-    let server_addr      = config.addr.value;
-    let server_watch     = config.watch.value && !is_release;
-    let index_js         = include_str!("index.js");
-    let index_html       = include_str!("index.html");
-    let release_mode     = if is_release {"release"} else {"debug"};
-    let index_js         = if is_release {index_js.split("// -- debug -- \\").next().unwrap()} else {index_js};
-    let index_html       = format!("{index_html}\n<script type=\"module\">{index_js}</script>"); 
-    let target_path      = format!("target/wasmdev-build-cache");
-    let out_path         = format!("{target_path}/wasm32-unknown-unknown");
-    let wasm_path        = format!("{out_path}/{release_mode}/{proj_name}.wasm");
-    let index_js_path    = format!("{out_path}/{release_mode}/{proj_name}.js");
-    let index_wasm_path  = format!("{out_path}/{release_mode}/{proj_name}_bg.wasm");
-    let proj_html_path   = format!("{proj_dir}/{server_path}/index.html");
-    let proj_server_path = format!("{proj_dir}/{server_path}");
-    let proj_src_path    = format!("{proj_dir}/src");
-    let build_wasm_now   = env::var("CARGO_WASMDEV").ok().is_none() && is_release;
+    // A build config has all paths and configs needed to build all web assets
+    let config: BuildConfig = config.try_into()?;
 
     // Check that server path for static assets exists:
-    let Ok(_) = std::fs::metadata(&proj_server_path) else {
-        let span = config.path.tt.map(|tt| tt.span()).unwrap_or(Span::call_site());
-        return compiler_error!(span, "Error: Unable to read directory: {}", &proj_server_path);
+    let Ok(_) = std::fs::metadata(&config.proj_server_path) else {
+        let span = config.attrs.path.tt.map(|tt| tt.span()).unwrap_or(Span::call_site());
+        return compiler_error!(span, "Error: Unable to read directory: {}", &config.proj_server_path);
     };
+
     // Check that provided ip address is an ip address:
-    let Ok(_) = server_addr.parse::<std::net::IpAddr>() else {
-        let span = config.addr.tt.map(|tt| tt.span()).unwrap_or(Span::call_site());
-        return compiler_error!(span, "Error: {} is not a valid ipv4 or ipv6 address", &server_addr);
+    let Ok(_) = config.attrs.addr.value.parse::<std::net::IpAddr>() else {
+        let span = config.attrs.addr.tt.map(|tt| tt.span()).unwrap_or(Span::call_site());
+        return compiler_error!(span, "Error: {} is not a valid ipv4 or ipv6 address", &config.attrs.addr.value);
     };
 
-    // Build project as wasm target during the build step (if building in release mode)
-    let tt_invalidate_static_asset_cache = if build_wasm_now {
-        let Some(_)         = build_wasm(wasm_path.as_str(), is_release, target_path.as_str())
-                              else { return compiler_error!("Failed to build wasm target") };
-        let Some(wasm_code) = load_file(Path::new(index_wasm_path.as_str()))
-                              else { return compiler_error!("Failed to read wasm code from {index_wasm_path}") };
-        let Some(js_code)   = load_file(Path::new(index_js_path.as_str()))
-                              else { return compiler_error!("Failed to read js code from {index_js_path}") };
-        let js_code         = minify_javascript(&js_code);
-        let dist_path       = &format!("target/dist/{proj_name}");
-        let html_code = (|| -> Option<String>{
-            let html_code = load_file(Path::new(proj_html_path.as_str()))?;
-            let html_code = from_utf8(&html_code).ok()?;
-            Some(format!("{}\n<script type=\"module\">{}</script>", html_code, index_js))
-        })().unwrap_or(index_html.clone());
+    // This enables support for "cargo build --release" to build all assets for us.
+    let build_wasm_now = env::var("CARGO_WASMDEV").ok().is_none() && config.is_release;
 
-        match (|| -> Result<TokenStream, std::io::Error> {
-            let _ = fs::create_dir_all(dist_path);
-            fs::write(format!("{dist_path}/index.wasm"), wasm_code)?;
-            fs::write(format!("{dist_path}/index.js"), js_code)?;
-            fs::write(format!("{dist_path}/index.html"), html_code)?;
-    
-            let file_paths = find_files(Path::new(&proj_server_path));
-            let file_path_iter = file_paths.iter()
-                .filter_map(|p| p.to_str())
-                .filter(|p| !p.ends_with(".rs"))          // Don't export src files.
-                .filter(|p| !p.ends_with("/index.html")); // index.html already handled.
+    // Store static assets so "cargo build" cache invalidation works
+    let static_asset_cache = if build_wasm_now { 
+        build_all_web_assets(&config)? 
+    } else { 
+        quote! {} // If we don't bulid web assets at compile-time, we don't a cache
+    };
 
-            // Clean up old files that were removed since last build:
-            {
-                let old_files = find_files(Path::new(&dist_path));
-                let mut old_file_paths: HashSet<_> = old_files.iter()
-                    .filter_map(|p| p.to_str())
-                    .map(|p| p.to_string().replace(dist_path, ""))
-                    .filter(|p| !p.ends_with("/index.wasm"))
-                    .filter(|p| !p.ends_with("/index.js"))
-                    .filter(|p| !p.ends_with("/index.html"))
-                    .collect();
-    
-                for file_path in file_path_iter.clone() {
-                    old_file_paths.remove(&file_path.replace(&proj_server_path, ""));
-                }
-                let files_to_remove = old_file_paths.iter().map(|p| format!("{dist_path}{p}"));
-                for file_path in files_to_remove {
-                    fs::remove_file(file_path)?;
-                }
-                remove_empty_dirs(Path::new(dist_path))?;
-            }
-
-            for file_path in file_path_iter {
-                let file_contents = fs::read(file_path)?;
-                let file_contents = if file_path.ends_with(".js") { 
-                    minify_javascript(&file_contents)
-                } else { file_contents };
-                let file_rel_path = file_path.replace(&proj_server_path, "");
-                let file_dist_path = format!("{dist_path}/{file_rel_path}");
-                // Create parent directory to make sure it exists:
-                let _ = Path::new(&file_dist_path).parent().map(|p| fs::create_dir_all(p));
-                fs::write(file_dist_path, file_contents)?;
-            }
-            // Abuse "include_bytes" to make sure static web assets invalidate cargo build cache
-            let tt_invalidate_static_asset_cache = TokenStream::from_iter(file_paths.iter()
-                .filter_map(|p| p.to_str())
-                .filter(|p| !p.ends_with(".rs"))
-                .map(|p| quote!{ include_bytes!(#p); })
-            );
-            eprintln!("\x1b[1m\x1b[92m    Finished\x1b[0m release artifacts in: '{dist_path}'");
-            Ok(tt_invalidate_static_asset_cache)
-        })() {
-            Ok(tt)   => tt,
-            Err(msg) => return compiler_error!("Failed to build project '{proj_name}' , {msg}"),
-        }
-    } else { quote! {} }; // Debug build does not need to invalidate cargo build cache
+    let address          = config.attrs.addr.value;
+    let port             = config.attrs.port.value;
+    let watch            = config.attrs.watch.value;
+    let is_release       = config.is_release;
+    let index_html       = config.index_html;
+    let index_js         = config.index_js;
+    let target_path      = config.target_path;
+    let wasm_path        = config.wasm_path;
+    let index_js_path    = config.index_js_path;
+    let index_wasm_path  = config.index_wasm_path;
+    let proj_html_path   = config.proj_html_path;
+    let proj_server_path = config.proj_server_path;
+    let proj_src_path    = config.proj_src_path;
 
     Ok(quote!{
         fn main() {
@@ -236,7 +159,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: Config) -> Result<Tok
                 use wasmdev::utils::{build_wasm, load_file, minify_javascript, make_watcher, find_files, Result, Event};
 
                 // Make sure that release build includes the latest versions of static assets:
-                #tt_invalidate_static_asset_cache
+                #static_asset_cache
                 // Make sure main is referenced to avoid "unused" compiler warnings:
                 #wasm_main_fn_ident;
 
@@ -246,9 +169,9 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: Config) -> Result<Tok
                 let proj_html_path   = #proj_html_path;
                 let proj_server_path = #proj_server_path;
                 let proj_src_path    = #proj_src_path;
-                let server_addr      = #server_addr;
-                let server_port      = #server_port;
-                let server_watch     = #server_watch;
+                let address      = #address;
+                let port      = #port;
+                let watch     = #watch;
 
                 let server = Server::new();
                 {
@@ -358,7 +281,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: Config) -> Result<Tok
                 load_and_serve_index_html();
                 build_load_and_serve_app();
 
-                let _watchers = if server_watch { Some((
+                let _watchers = if watch { Some((
                     make_watcher(Path::new(proj_server_path), load_and_serve_file)
                         .expect("Unable to watch static files folder, required for hot-reload when updated."),
                     make_watcher(Path::new(proj_src_path), move |_| { build_load_and_serve_app(); })
@@ -367,9 +290,9 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: Config) -> Result<Tok
                         // Providing a custom index.html is optional, so open watcher is allowed to fail silently here.
                 ))} else { None };
 
-                let addr = format!("{}:{}", server_addr, server_port);
+                let addr = format!("{}:{}", address, port);
                 let Ok(tcp_socket) = TcpListener::bind(addr) else { 
-                    panic!("Unable to bind tcp port: {}", server_port)
+                    panic!("Unable to bind tcp port: {}", port)
                 };
                 let Ok(addr) = tcp_socket.local_addr() else {
                     panic!("Unable to get local socket address.")
