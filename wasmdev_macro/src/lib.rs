@@ -106,11 +106,9 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
     let index_html          = &config.index_html;
     let index_js            = &config.index_js;
     let target_path         = &config.target_path;
-
     let address             = &config.attrs.addr.value;
     let port                = &config.attrs.port.value;
     let watch               = &config.attrs.watch.value;
-
     let wasm_path           = &config.wasm_path;
     let index_js_path       = &config.index_js_path;
     let index_wasm_path     = &config.index_wasm_path;
@@ -160,10 +158,13 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                 use wasmdev::{Server, ServerConfig};
                 use wasmdev::utils::{build_wasm, load_file, minify_javascript, make_watcher, find_files, Result, Event};
 
+                let is_release       = #is_release;
+                let index_html       = #index_html;
+                let index_js         = #index_js;
+                let target_path      = #target_path;
                 let address          = #address;
                 let port             = #port;
                 let watch            = #watch;
-
                 let wasm_path        = #wasm_path;
                 let index_js_path    = #index_js_path;
                 let index_wasm_path  = #index_wasm_path;
@@ -185,7 +186,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                         .build();
                     server_config
                         .on_get_request("/index.html")
-                        .set_response_body(#index_html.as_bytes().to_vec())
+                        .set_response_body(index_html.as_bytes().to_vec())
                         .build();
                 }
 
@@ -193,10 +194,10 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                     let mut server = server.clone();
                     move || -> Option<()>{
                         println!("\x1b[1m\x1b[92m    Building\x1b[0m wasm target");
-                        let _         = build_wasm(wasm_path, #is_release, #target_path)?;
+                        let _         = build_wasm(wasm_path, is_release, target_path)?;
                         let wasm_code = load_file(Path::new(index_wasm_path))?;
                         let js_code   = load_file(Path::new(index_js_path))?;
-                        let js_code   = if #is_release { minify_javascript(&js_code) } else { js_code };
+                        let js_code   = if is_release { minify_javascript(&js_code) } else { js_code };
                         let code_did_update = {
                             let mut server_config = server.config.write().unwrap();
                             server_config
@@ -265,7 +266,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                     move || {
                         let Some(index_html) = load_file(Path::new(proj_html_path)) else { return };
                         let index_html       = from_utf8(&index_html).expect("index.html is not utf8 encoded.");
-                        let index_html       = format!("{}\n<script type=\"module\">{}</script>",index_html, #index_js); 
+                        let index_html       = format!("{}\n<script type=\"module\">{}</script>",index_html, index_js); 
                         let file_did_update = {
                             server.config.write().unwrap()
                             .on_get_request("/index.html")
