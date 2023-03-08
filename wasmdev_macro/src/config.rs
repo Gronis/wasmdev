@@ -34,7 +34,7 @@ pub(crate) struct BuildConfig {
     pub(crate) index_js_path: String,
     pub(crate) index_wasm_path: String,
     pub(crate) proj_html_path: String,
-    pub(crate) proj_server_path: String,
+    pub(crate) proj_static_path: String,
     pub(crate) proj_src_path: String,
 }
 
@@ -60,7 +60,7 @@ impl TryInto<BuildConfig> for AttrConfig {
         let index_js_path    = format!("{out_path}/{release_mode}/{proj_name}.js");
         let index_wasm_path  = format!("{out_path}/{release_mode}/{proj_name}_bg.wasm");
         let proj_html_path   = format!("{proj_dir}/{}/index.html", &self.path.value);
-        let proj_server_path = format!("{proj_dir}/{}", &self.path.value);
+        let proj_static_path = format!("{proj_dir}/{}", &self.path.value);
         let proj_src_path    = format!("{proj_dir}/src");
     
         Ok(BuildConfig {
@@ -72,7 +72,7 @@ impl TryInto<BuildConfig> for AttrConfig {
             is_release,
             proj_html_path,
             proj_name,
-            proj_server_path,
+            proj_static_path,
             proj_src_path,
             target_path,
             wasm_path,
@@ -105,7 +105,7 @@ pub(crate) fn build_all_web_assets(config: &BuildConfig) -> Result<TokenStream, 
         fs::write(format!("{dist_path}/index.js"), js_code)?;
         fs::write(format!("{dist_path}/index.html"), html_code)?;
 
-        let file_paths = find_files(Path::new(&config.proj_server_path));
+        let file_paths = find_files(Path::new(&config.proj_static_path));
         let file_path_iter = file_paths.iter()
             .filter_map(|p| p.to_str())
             .filter(|p| !p.ends_with(".rs"))          // Don't export src files.
@@ -123,7 +123,7 @@ pub(crate) fn build_all_web_assets(config: &BuildConfig) -> Result<TokenStream, 
                 .collect();
 
             for file_path in file_path_iter.clone() {
-                old_file_paths.remove(&file_path.replace(&config.proj_server_path, ""));
+                old_file_paths.remove(&file_path.replace(&config.proj_static_path, ""));
             }
             let files_to_remove = old_file_paths.iter().map(|p| format!("{dist_path}{p}"));
             for file_path in files_to_remove {
@@ -137,7 +137,7 @@ pub(crate) fn build_all_web_assets(config: &BuildConfig) -> Result<TokenStream, 
             let file_contents = if file_path.ends_with(".js") { 
                 minify_javascript(&file_contents)
             } else { file_contents };
-            let file_rel_path = file_path.replace(&config.proj_server_path, "");
+            let file_rel_path = file_path.replace(&config.proj_static_path, "");
             let file_dist_path = format!("{dist_path}/{file_rel_path}");
             // Create parent directory to make sure it exists:
             let _ = Path::new(&file_dist_path).parent().map(|p| fs::create_dir_all(p));
@@ -222,7 +222,7 @@ pub(crate) fn parse_config_attrs(attrs: TokenStream) -> Result<AttrConfig, Token
                 watch = Some(Attr::new(val, Some(value.into())));
             }
             i  => { 
-                return compiler_error!(ident, "Unknown attribute: '{i}', help: available attributes are: 'addr', 'path', 'port' and watch");
+                return compiler_error!(ident, "Unknown attribute: '{i}', help: available attributes are: 'addr', 'path', 'port' and 'watch'");
             },
         }
 

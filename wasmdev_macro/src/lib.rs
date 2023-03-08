@@ -1,4 +1,4 @@
-use proc_macro::TokenStream as BuiltInTokenStream;
+use proc_macro::TokenStream as StdTokenStream;
 use proc_macro2::{TokenStream, Span};
 use quote::quote;
 use std::env;
@@ -66,7 +66,7 @@ use config::*;
 /// ```
 /// 
 #[proc_macro_attribute]
-pub fn main(attrs: BuiltInTokenStream, main_fn: BuiltInTokenStream) -> BuiltInTokenStream {
+pub fn main(attrs: StdTokenStream, main_fn: StdTokenStream) -> StdTokenStream {
     match (|| -> Result<TokenStream, TokenStream> {
         let wasm_fn: TokenStream  = main_fn.into();
         let config                = parse_config_attrs(attrs.into())?;
@@ -86,6 +86,7 @@ pub fn main(attrs: BuiltInTokenStream, main_fn: BuiltInTokenStream) -> BuiltInTo
 }
 
 fn make_wasm_main_fn(wasm_main_fn: &TokenStream) -> Result<TokenStream, TokenStream> {
+    // Fail if macro is annotated on something that is not a function
     let Some(wasm_main_fn_ident) = get_fn_name(wasm_main_fn) else {
         return compiler_error!("No main function found");
     };
@@ -99,24 +100,39 @@ fn make_wasm_main_fn(wasm_main_fn: &TokenStream) -> Result<TokenStream, TokenStr
 }
 
 fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result<TokenStream, TokenStream> {
+    let config: BuildConfig = config.try_into()?;
+
+    let is_release          = &config.is_release;
+    let index_html          = &config.index_html;
+    let index_js            = &config.index_js;
+    let target_path         = &config.target_path;
+
+    let address             = &config.attrs.addr.value;
+    let port                = &config.attrs.port.value;
+    let watch               = &config.attrs.watch.value;
+
+    let wasm_path           = &config.wasm_path;
+    let index_js_path       = &config.index_js_path;
+    let index_wasm_path     = &config.index_wasm_path;
+    let proj_html_path      = &config.proj_html_path;
+    let proj_src_path       = &config.proj_src_path;
+    let proj_static_path    = &config.proj_static_path;
+
     // Fail early if macro is annotated on something that is not a function
     let Some(wasm_main_fn_ident) = get_fn_name(wasm_main_fn) else {
         return compiler_error!("No main function found");
     };
 
-    // A build config has all paths and configs needed to build all web assets
-    let config: BuildConfig = config.try_into()?;
-
     // Check that server path for static assets exists:
-    let Ok(_) = std::fs::metadata(&config.proj_server_path) else {
+    let Ok(_) = std::fs::metadata(proj_static_path) else {
         let span = config.attrs.path.tt.map(|tt| tt.span()).unwrap_or(Span::call_site());
-        return compiler_error!(span, "Error: Unable to read directory: {}", &config.proj_server_path);
+        return compiler_error!(span, "Error: Unable to read directory: {}", proj_static_path);
     };
 
     // Check that provided ip address is an ip address:
-    let Ok(_) = config.attrs.addr.value.parse::<std::net::IpAddr>() else {
+    let Ok(_) = address.parse::<std::net::IpAddr>() else {
         let span = config.attrs.addr.tt.map(|tt| tt.span()).unwrap_or(Span::call_site());
-        return compiler_error!(span, "Error: {} is not a valid ipv4 or ipv6 address", &config.attrs.addr.value);
+        return compiler_error!(span, "Error: {} is not a valid ipv4 or ipv6 address", address);
     };
 
     // This enables support for "cargo build --release" to build all assets for us.
@@ -128,20 +144,6 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
     } else { 
         quote! {} // If we don't bulid web assets at compile-time, we don't a cache
     };
-
-    let address          = config.attrs.addr.value;
-    let port             = config.attrs.port.value;
-    let watch            = config.attrs.watch.value;
-    let is_release       = config.is_release;
-    let index_html       = config.index_html;
-    let index_js         = config.index_js;
-    let target_path      = config.target_path;
-    let wasm_path        = config.wasm_path;
-    let index_js_path    = config.index_js_path;
-    let index_wasm_path  = config.index_wasm_path;
-    let proj_html_path   = config.proj_html_path;
-    let proj_server_path = config.proj_server_path;
-    let proj_src_path    = config.proj_src_path;
 
     Ok(quote!{
         fn main() {
@@ -158,20 +160,21 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                 use wasmdev::{Server, ServerConfig};
                 use wasmdev::utils::{build_wasm, load_file, minify_javascript, make_watcher, find_files, Result, Event};
 
-                // Make sure that release build includes the latest versions of static assets:
-                #static_asset_cache
-                // Make sure main is referenced to avoid "unused" compiler warnings:
-                #wasm_main_fn_ident;
+                let address          = #address;
+                let port             = #port;
+                let watch            = #watch;
 
                 let wasm_path        = #wasm_path;
                 let index_js_path    = #index_js_path;
                 let index_wasm_path  = #index_wasm_path;
                 let proj_html_path   = #proj_html_path;
-                let proj_server_path = #proj_server_path;
                 let proj_src_path    = #proj_src_path;
-                let address      = #address;
-                let port      = #port;
-                let watch     = #watch;
+                let proj_static_path = #proj_static_path;
+
+                // Make sure that release build includes the latest versions of static assets:
+                #static_asset_cache
+                // Make sure main is referenced to avoid "unused" compiler warnings:
+                #wasm_main_fn_ident;
 
                 let server = Server::new();
                 {
@@ -213,10 +216,10 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                     }
                 };
 
-                let file_path_to_req_path = move |path: &str| path.replace(proj_server_path, "").replace("\\", "/");
+                let file_path_to_req_path = move |path: &str| path.replace(proj_static_path, "").replace("\\", "/");
 
                 let serve_static_files = || {
-                    let file_paths = find_files(Path::new(proj_server_path));
+                    let file_paths = find_files(Path::new(proj_static_path));
                     let file_and_req_path_iter = file_paths.iter()
                         .filter_map(|file_path| file_path.to_str())
                         .map(|file_path| (file_path, file_path_to_req_path(file_path)))
@@ -282,7 +285,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                 build_load_and_serve_app();
 
                 let _watchers = if watch { Some((
-                    make_watcher(Path::new(proj_server_path), load_and_serve_file)
+                    make_watcher(Path::new(proj_static_path), load_and_serve_file)
                         .expect("Unable to watch static files folder, required for hot-reload when updated."),
                     make_watcher(Path::new(proj_src_path), move |_| { build_load_and_serve_app(); })
                         .expect("Unable to watch src folder, required for hot-reload."),
