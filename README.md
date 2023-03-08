@@ -60,8 +60,16 @@ It also has some features that `trunk` don't have (I believe), like:
 # Configuration
 
 The following options can be set to `wasmdev::main` macro:
-* **port**: What tcp port to run the http server on. Defaults to port `8080`
-* **path**: Where to put your static web assets like css styles, icons, logos etc. Defaults to the `"src"` folder.
+* **addr**: Socket address to webserver 
+  - Default "127.0.0.1"
+* **path**: Path to static web assets 
+  - Default: "src"
+* **port**: TCP socket port to use 
+  - Default: 8080
+* **watch**: Reload assets on file-system changes
+  - Default: true
+  - Note: **Only affects debug build**, always false for release build
+
 ```rust
 // src/main.rs
 #[wasmdev::main(port: 8080, path: "src")]
