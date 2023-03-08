@@ -31,7 +31,7 @@ pub(crate) fn parse_config_attrs(attrs: TokenStream) -> Result<Config, TokenStre
 
     struct NoQuotesError;
     let trim_quotes = |value: &str| -> Result<String, NoQuotesError> {
-        if value.as_bytes()[0] != ('"' as u8) || value.as_bytes()[value.as_bytes().len() - 1] != ('"' as u8) { 
+        if value.as_bytes()[0] != b'"' || value.as_bytes()[value.as_bytes().len() - 1] != b'"' { 
             return Err(NoQuotesError);
         }
         Ok(value[1..value.len() - 1].to_string())
