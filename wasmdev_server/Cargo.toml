@@ -8,9 +8,7 @@ repository  = "https://github.com/Gronis/wasmdev"
 readme      = "../README.md"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+wasmdev_core = { workspace = true }
 base64 = "0.21.0"
 sha1 = "0.10.5"
 notify = "5.0.0"
-xshell = "0.2.3"
-wasm-bindgen-cli-support = "0.2.83"
-minify-js = "0.5.6"

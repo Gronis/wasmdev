@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "wasmdev",
+    "wasmdev_core",
     "wasmdev_macro",
     "wasmdev_server",
     "examples/counter_leptos",
@@ -22,5 +23,6 @@ opt-level = 3
 
 [workspace.dependencies]
 wasmdev        = { version = "0.1.6", path = "./wasmdev" }
+wasmdev_core   = { version = "0.1.6", path = "./wasmdev_core" }
 wasmdev_macro  = { version = "0.1.6", path = "./wasmdev_macro" }
 wasmdev_server = { version = "0.1.6", path = "./wasmdev_server" }

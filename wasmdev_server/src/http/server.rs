@@ -7,10 +7,11 @@ use std::path::Path;
 use std::sync::{Arc, RwLock};
 use std::thread;
 
-use crate::utils::{defer, load_file, simple_hash};
+use wasmdev_core::load_file;
 
-use super::{Header, StatusCode};
-use super::helper::*;
+use crate::utils::{defer, simple_hash};
+use crate::http::{Header, StatusCode};
+use crate::http::helper::*;
 
 #[derive(PartialEq)]
 pub struct Endpoint{

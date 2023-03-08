@@ -5,7 +5,6 @@ use std::{env, fs};
 use std::collections::HashSet;
 use std::path::Path;
 use std::str::from_utf8;
-use wasmdev_server::utils::{build_wasm, minify_javascript, load_file, find_files};
 
 mod util;
 
@@ -30,14 +29,14 @@ struct Config {
 ///
 /// Turns the main function for non-`wasm` targets into a development web-server.
 /// 
-/// ### Arguments
-/// * **addr** (optional): Socket address to webserver 
+/// ### Optional Arguments
+/// * **addr**: Socket address to webserver 
 ///   - Default "127.0.0.1"
-/// * **path** (optional): Path to static web assets 
+/// * **path**: Path to static web assets 
 ///   - Default: "src"
-/// * **port** (optional): TCP socket port to use 
+/// * **port**: TCP socket port to use 
 ///   - Default: 8080
-/// * **watch** (optional): Reload assets on file-system changes
+/// * **watch**: Reload assets on file-system changes
 ///   - Default: true
 ///   - Note: **Only affects debug build**, always false for release build
 /// 
@@ -258,6 +257,8 @@ fn make_wasm_main_fn(wasm_main_fn: &TokenStream) -> Result<TokenStream, TokenStr
 }
 
 fn make_server_main_fn(wasm_main_fn: &TokenStream, config: Config) -> Result<TokenStream, TokenStream> {
+    use wasmdev_core::{build_wasm, minify_javascript, load_file, find_files};
+    
     let Some(wasm_main_fn_ident) = get_fn_name(wasm_main_fn) else {
         return compiler_error!("No main function found");
     };

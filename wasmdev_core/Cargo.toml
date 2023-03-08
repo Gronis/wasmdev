@@ -1,18 +1,13 @@
 [package]
-name        = "wasmdev_macro"
+name        = "wasmdev_core"
 version     = { workspace = true }
 edition     = "2021"
-description = "wasmdev macro implementation"
+description = "wasmdev core implementation, used by wasmdev server + macros"
 license     = "MIT"
 repository  = "https://github.com/Gronis/wasmdev"
 readme      = "../README.md"
 
-[lib]
-proc-macro = true
-
-[dependencies]
-proc-macro2 = "1.0.49"
-quote = "1.0.23"
-
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-wasmdev_core = { workspace = true }
+xshell = "0.2.3"
+wasm-bindgen-cli-support = "0.2.83"
+minify-js = "0.5.6"

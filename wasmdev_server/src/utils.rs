@@ -1,11 +1,11 @@
-use std::fs::File;
-use std::io::prelude::*;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 #[cfg(not(target_family = "wasm"))]
 pub use notify::event::Event;
 #[cfg(not(target_family = "wasm"))]
 pub use notify::{Result, Watcher, EventHandler};
+#[cfg(not(target_family = "wasm"))]
+pub use wasmdev_core::*;
 
 pub fn simple_hash(bin: &[u8]) -> u32 {
     let mut a = 1u32;
@@ -19,52 +19,6 @@ pub fn simple_hash(bin: &[u8]) -> u32 {
     }
     res
 }
-
-pub fn load_file(file_path: &Path) -> Option<Vec<u8>> {
-    let mut file_handle = File::open(file_path).ok()?;
-    let mut file_contents = Vec::new();
-    file_handle.read_to_end(&mut file_contents).ok()?;
-    Some(file_contents)
-}
-
-#[cfg(not(target_family = "wasm"))]
-pub fn build_wasm(input_path: &str, is_release: bool, target_dir: &str) -> Option<()> {
-    use xshell::{Shell, cmd};
-    use wasm_bindgen_cli_support::Bindgen;
-
-    let mut args = vec![
-        "--target", "wasm32-unknown-unknown",
-        "--target-dir", target_dir,
-        "--color", "always",
-    ];
-    if is_release { args.push("--release") };
-    let args = args; // Remove mutability;
-    let sh = Shell::new().expect("Unable to create shell");
-    {
-        // This lets wasmdev::main know if cargo was started from within wasmdev::main
-        let _env_guard = sh.push_env("CARGO_WASMDEV", "1");
-        cmd!(sh, "cargo build").args(args).quiet().run().ok()?;
-    }
-    let output_path = Path::new(input_path).parent().expect("No parent when building wasm");
-    Bindgen::new()
-        .input_path(input_path)
-        .web(true)
-        .map_err(|err| println!("{}", err)).ok()?
-        .demangle(!is_release)
-        .debug(!is_release)
-        .remove_name_section(is_release)
-        .remove_producers_section(is_release)
-        .generate(output_path).map_err(|err| println!("{}", err)).ok()
-}
-
-#[cfg(not(target_family = "wasm"))]
-pub fn minify_javascript(code_in: &[u8]) -> Vec<u8>{
-    use minify_js::{Session, TopLevelMode, minify};
-    let session = Session::new();
-    let mut code_out = vec![];
-    minify(&session, TopLevelMode::Module, code_in, &mut code_out).unwrap();
-    code_out
-} 
 
 /// This function wraps notify crate with some logic that tries to avoid duplicate events after one-another
 /// It also defaults to a Recursive watcher.
@@ -115,35 +69,6 @@ pub fn make_watcher(path: &Path, mut event_handler: impl EventHandler) -> Option
 
     watcher.watch(path, RecursiveMode::Recursive).ok()?;
     Some(watcher)
-}
-
-pub fn find_files(path: &Path) -> Vec<PathBuf> {
-    let mut files = vec![];
-    let mut paths = vec![path.to_path_buf()];
-    use std::io;
-    use std::fs::{self};
-    let mut traverse = |paths_in: &mut Vec<PathBuf>| -> io::Result<Vec<PathBuf>> {
-        let mut paths_out = vec![];
-        for path in paths_in.drain(..) {
-            for entry in fs::read_dir(path)? {
-                let entry = entry?;
-                let path = entry.path();
-                if path.is_dir() {
-                    paths_out.push(path);
-                } else {
-                    files.push(path);
-                }
-            }
-        }
-        Ok(paths_out)
-    };
-
-    // Recurse 3 layers down
-    let Ok(mut paths) = traverse(&mut paths) else { return vec![] };
-    let Ok(mut paths) = traverse(&mut paths) else { return vec![] };
-    let Ok(_)         = traverse(&mut paths) else { return vec![] };
-
-    files
 }
 
 pub struct Deferred <T: Fn() -> ()>{
