@@ -1,14 +1,14 @@
 
-use std::io::{self, Read};
-use std::fs::{self, File};
+use std::io;
+use std::fs;
 use std::path::{Path, PathBuf};
 use minify_js::{Session, TopLevelMode, minify};
 use xshell::{Shell, cmd};
 use wasm_bindgen_cli_support::Bindgen;
 
-pub fn find_files(path: &Path) -> Vec<PathBuf> {
+pub fn find_files<P: AsRef<Path>>(path: P) -> Vec<PathBuf> {
     let mut files = vec![];
-    let mut paths = vec![path.to_path_buf()];
+    let mut paths = vec![path.as_ref().to_path_buf()];
     let mut traverse = |paths_in: &mut Vec<PathBuf>| -> io::Result<Vec<PathBuf>> {
         let mut paths_out = vec![];
         for path in paths_in.drain(..) {
@@ -33,14 +33,8 @@ pub fn find_files(path: &Path) -> Vec<PathBuf> {
     files
 }
 
-pub fn load_file(file_path: &Path) -> Option<Vec<u8>> {
-    let mut file_handle = File::open(file_path).ok()?;
-    let mut file_contents = Vec::new();
-    file_handle.read_to_end(&mut file_contents).ok()?;
-    Some(file_contents)
-}
-
-pub fn build_wasm(input_path: &str, is_release: bool, target_dir: &str) -> Option<()> {
+pub fn build_wasm<P1: AsRef<Path>, P2: AsRef<Path>>(input_path: P1, is_release: bool, target_dir: P2) -> Option<()> {
+    let target_dir = target_dir.as_ref().to_str()?;
     let mut args = vec![
         "--target", "wasm32-unknown-unknown",
         "--target-dir", target_dir,
@@ -54,9 +48,9 @@ pub fn build_wasm(input_path: &str, is_release: bool, target_dir: &str) -> Optio
         let _env_guard = sh.push_env("CARGO_WASMDEV", "1");
         cmd!(sh, "cargo build").args(args).quiet().run().ok()?;
     }
-    let output_path = Path::new(input_path).parent().expect("No parent when building wasm");
+    let output_path = input_path.as_ref().parent().expect("No parent when building wasm");
     Bindgen::new()
-        .input_path(input_path)
+        .input_path(&input_path)
         .web(true)
         .map_err(|err| println!("{}", err)).ok()?
         .demangle(!is_release)

@@ -154,9 +154,10 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                 use std::net::TcpListener;
                 use std::path::{Path, PathBuf};
                 use std::str::from_utf8;
+                use std::fs;
                 use wasmdev::prelude::*;
                 use wasmdev::{Server, ServerConfig};
-                use wasmdev::utils::{build_wasm, load_file, minify_javascript, make_watcher, find_files, Result, Event};
+                use wasmdev::utils::{build_wasm, minify_javascript, make_watcher, find_files, Result, Event};
 
                 let is_release       = #is_release;
                 let index_html       = #index_html;
@@ -195,8 +196,8 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                     move || -> Option<()>{
                         println!("\x1b[1m\x1b[92m    Building\x1b[0m wasm target");
                         let _         = build_wasm(wasm_path, is_release, target_path)?;
-                        let wasm_code = load_file(Path::new(index_wasm_path))?;
-                        let js_code   = load_file(Path::new(index_js_path))?;
+                        let wasm_code = fs::read(&index_wasm_path).ok()?;
+                        let js_code   = fs::read(&index_js_path).ok()?;
                         let js_code   = if is_release { minify_javascript(&js_code) } else { js_code };
                         let code_did_update = {
                             let mut server_config = server.config.write().unwrap();
@@ -220,7 +221,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                 let file_path_to_req_path = move |path: &str| path.replace(proj_static_path, "").replace("\\", "/");
 
                 let serve_static_files = || {
-                    let file_paths = find_files(Path::new(proj_static_path));
+                    let file_paths = find_files(proj_static_path);
                     let file_and_req_path_iter = file_paths.iter()
                         .filter_map(|file_path| file_path.to_str())
                         .map(|file_path| (file_path, file_path_to_req_path(file_path)))
@@ -246,7 +247,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                             let file_path = file_path.as_path();
                             let Some(req_path) = file_path.to_str().map(file_path_to_req_path) else { continue };
                             if req_path == "/index.html" { continue }; // index.html is handled in another watcher, so skip it.
-                            let Some(file_contents) = load_file(file_path) else { continue };
+                            let Ok(file_contents) = fs::read(file_path) else { continue };
                             let file_did_update = {
                                 server.config.write().unwrap()
                                     .on_get_request(&req_path)
@@ -264,7 +265,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                 let load_and_serve_index_html = {
                     let mut server = server.clone();
                     move || {
-                        let Some(index_html) = load_file(Path::new(proj_html_path)) else { return };
+                        let Ok(index_html) = fs::read(&proj_html_path) else { return };
                         let index_html       = from_utf8(&index_html).expect("index.html is not utf8 encoded.");
                         let index_html       = format!("{}\n<script type=\"module\">{}</script>",index_html, index_js); 
                         let file_did_update = {

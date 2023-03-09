@@ -3,11 +3,10 @@ use std::marker::PhantomData;
 use std::net::{TcpListener, TcpStream, SocketAddr};
 use std::io::{self, BufWriter};
 use std::io::{BufRead, BufReader, Write};
+use std::fs;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
 use std::thread;
-
-use wasmdev_core::load_file;
 
 use crate::utils::{defer, simple_hash};
 use crate::http::{Header, StatusCode};
@@ -230,7 +229,7 @@ impl Server{
                             match response_action {
                                 ResponseAction::InternalRedirect(redirect_path) => { path = &redirect_path; },
                                 ResponseAction::LazyLoad(file_path) => {
-                                    let Some(body) = load_file(Path::new(file_path)) else { break None };
+                                    let Ok(body) = fs::read(&file_path) else { break None };
                                     let mut headers = endpoint.headers.clone();
                                     headers.push(Header::ContentLength(body.len()));
                                     lazy_response = Some((path.to_string(), headers, ResponseAction::Content(body)));

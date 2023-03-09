@@ -1,4 +1,4 @@
-use std::{env, path::Path, str::from_utf8, fs, collections::HashSet};
+use std::{env, str::from_utf8, fs, collections::HashSet};
 
 use proc_macro2::{TokenStream, TokenTree, Span};
 use quote::quote;
@@ -83,18 +83,18 @@ impl TryInto<BuildConfig> for AttrConfig {
 /// Build all web assets and put it in target/dist/{proj_name}
 #[cfg(not(target_family = "wasm"))]
 pub(crate) fn build_all_web_assets(config: &BuildConfig) -> Result<TokenStream, TokenStream> {
-    use wasmdev_core::{build_wasm, minify_javascript, load_file, find_files};
+    use wasmdev_core::{build_wasm, minify_javascript, find_files};
     
-    let Some(_)         = build_wasm(config.wasm_path.as_str(), config.is_release, config.target_path.as_str())
+    let Some(_)       = build_wasm(&config.wasm_path, config.is_release, &config.target_path)
                             else { return compiler_error!("Failed to build wasm target") };
-    let Some(wasm_code) = load_file(Path::new(config.index_wasm_path.as_str()))
+    let Ok(wasm_code) = fs::read(&config.index_wasm_path)
                             else { return compiler_error!("Failed to read wasm code from {}", config.index_wasm_path) };
-    let Some(js_code)   = load_file(Path::new(config.index_js_path.as_str()))
+    let Ok(js_code)   = fs::read(&config.index_js_path)
                             else { return compiler_error!("Failed to read js code from {}", config.index_js_path) };
-    let js_code         = minify_javascript(&js_code);
-    let dist_path       = &format!("target/dist/{}", config.proj_name);
+    let js_code       = minify_javascript(&js_code);
+    let dist_path     = &format!("target/dist/{}", config.proj_name);
     let html_code = (|| -> Option<String>{
-        let html_code = load_file(Path::new(config.proj_html_path.as_str()))?;
+        let html_code = fs::read(&config.proj_html_path).ok()?;
         let html_code = from_utf8(&html_code).ok()?;
         Some(format!("{}\n<script type=\"module\">{}</script>", html_code, config.index_js))
     })().unwrap_or(config.index_html.clone());
@@ -105,7 +105,7 @@ pub(crate) fn build_all_web_assets(config: &BuildConfig) -> Result<TokenStream, 
         fs::write(format!("{dist_path}/index.js"), js_code)?;
         fs::write(format!("{dist_path}/index.html"), html_code)?;
 
-        let file_paths = find_files(Path::new(&config.proj_static_path));
+        let file_paths = find_files(&config.proj_static_path);
         let file_path_iter = file_paths.iter()
             .filter_map(|p| p.to_str())
             .filter(|p| !p.ends_with(".rs"))          // Don't export src files.
@@ -113,7 +113,7 @@ pub(crate) fn build_all_web_assets(config: &BuildConfig) -> Result<TokenStream, 
 
         // Clean up old files that were removed since last build:
         {
-            let old_files = find_files(Path::new(&dist_path));
+            let old_files = find_files(&dist_path);
             let mut old_file_paths: HashSet<_> = old_files.iter()
                 .filter_map(|p| p.to_str())
                 .map(|p| p.to_string().replace(dist_path, ""))
@@ -129,7 +129,7 @@ pub(crate) fn build_all_web_assets(config: &BuildConfig) -> Result<TokenStream, 
             for file_path in files_to_remove {
                 fs::remove_file(file_path)?;
             }
-            remove_empty_dirs(Path::new(dist_path))?;
+            remove_empty_dirs(&dist_path)?;
         }
 
         for file_path in file_path_iter {
@@ -139,8 +139,7 @@ pub(crate) fn build_all_web_assets(config: &BuildConfig) -> Result<TokenStream, 
             } else { file_contents };
             let file_rel_path = file_path.replace(&config.proj_static_path, "");
             let file_dist_path = format!("{dist_path}/{file_rel_path}");
-            // Create parent directory to make sure it exists:
-            let _ = Path::new(&file_dist_path).parent().map(|p| fs::create_dir_all(p));
+            create_parent_dir_all(&file_dist_path)?;
             fs::write(file_dist_path, file_contents)?;
         }
         // Abuse "include_bytes" to make sure static web assets invalidate cargo build cache
