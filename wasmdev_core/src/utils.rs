@@ -6,7 +6,8 @@ use minify_js::{Session, TopLevelMode, minify};
 use xshell::{Shell, cmd};
 use wasm_bindgen_cli_support::Bindgen;
 
-pub fn find_files<P: AsRef<Path>>(path: P) -> Vec<PathBuf> {
+/// Recusivly list files 3-layers down.
+pub fn list_files_recursively<P: AsRef<Path>>(path: P) -> io::Result<Vec<PathBuf>> {
     let mut files = vec![];
     let mut paths = vec![path.as_ref().to_path_buf()];
     let mut traverse = |paths_in: &mut Vec<PathBuf>| -> io::Result<Vec<PathBuf>> {
@@ -26,11 +27,11 @@ pub fn find_files<P: AsRef<Path>>(path: P) -> Vec<PathBuf> {
     };
 
     // Recurse 3 layers down
-    let Ok(mut paths) = traverse(&mut paths) else { return vec![] };
-    let Ok(mut paths) = traverse(&mut paths) else { return vec![] };
-    let Ok(_)         = traverse(&mut paths) else { return vec![] };
+    let mut paths = traverse(&mut paths)?;
+    let mut paths = traverse(&mut paths)?;
+    let _         = traverse(&mut paths)?;
 
-    files
+    Ok(files)
 }
 
 pub fn build_wasm<P1: AsRef<Path>, P2: AsRef<Path>>(input_path: P1, is_release: bool, target_dir: P2) -> Option<()> {

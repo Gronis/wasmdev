@@ -1,9 +1,4 @@
-use std::path::Path;
-
-#[cfg(not(target_family = "wasm"))]
-pub use notify::event::Event;
-#[cfg(not(target_family = "wasm"))]
-pub use notify::{Result, Watcher, EventHandler};
+use std::path::{Path, PathBuf};
 #[cfg(not(target_family = "wasm"))]
 pub use wasmdev_core::*;
 
@@ -20,16 +15,30 @@ pub fn simple_hash(bin: &[u8]) -> u32 {
     res
 }
 
+pub trait EventHandler: Send + 'static {
+    fn handle_event(&mut self, files: Vec<PathBuf>);
+}
+
+impl<'a, F> EventHandler for F
+where
+    F: FnMut(Vec<PathBuf>) + Send + 'static,
+{
+    fn handle_event(&mut self, files: Vec<PathBuf>) {
+        (self)(files);
+    }
+}
+
 /// This function wraps notify crate with some logic that tries to avoid duplicate events after one-another
 /// It also defaults to a Recursive watcher.
 #[cfg(not(target_family = "wasm"))]
-pub fn make_watcher(path: &Path, mut event_handler: impl EventHandler) -> Option<impl Watcher> {
-    use notify::{recommended_watcher, RecursiveMode};
-    use notify::event::EventKind;
+pub fn make_watcher<P: AsRef<Path>>(path: P, mut event_handler: impl EventHandler) -> Option<impl notify::Watcher> {
+    use notify::{recommended_watcher, RecursiveMode, Result, Watcher};
+    use notify::event::{Event, EventKind};
     use std::sync::{Arc, RwLock};
     use std::sync::mpsc::channel;
     use std::thread;
 
+    let path = path.as_ref();
     let (event_sender, event_receiver) = channel::<Event>();
     let active_event = Arc::new(RwLock::new(None));
 
@@ -43,7 +52,7 @@ pub fn make_watcher(path: &Path, mut event_handler: impl EventHandler) -> Option
         thread::spawn(move || {
             for event in event_receiver.iter() {
                 *(active_event.write().unwrap()) = Some(hash_event(&event));
-                event_handler.handle_event(Ok(event));
+                event_handler.handle_event(event.paths);
                 *(active_event.write().unwrap()) = None;
             }
         });

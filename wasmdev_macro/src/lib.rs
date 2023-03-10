@@ -157,7 +157,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                 use std::fs;
                 use wasmdev::prelude::*;
                 use wasmdev::{Server, ServerConfig};
-                use wasmdev::utils::{build_wasm, minify_javascript, make_watcher, find_files, Result, Event};
+                use wasmdev::utils::{build_wasm, minify_javascript, make_watcher, list_files_recursively};
 
                 let is_release       = #is_release;
                 let index_html       = #index_html;
@@ -218,10 +218,12 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                     }
                 };
 
-                let file_path_to_req_path = move |path: &str| path.replace(proj_static_path, "").replace("\\", "/");
+                let file_path_to_req_path = move |path: &str| 
+                    path.replace(proj_static_path, "").replace("\\", "/");
 
                 let serve_static_files = || {
-                    let file_paths = find_files(proj_static_path);
+                    let file_paths = list_files_recursively(proj_static_path)
+                        .expect(&format!("Unable to list static assets: '{}'", proj_static_path));
                     let file_and_req_path_iter = file_paths.iter()
                         .filter_map(|file_path| file_path.to_str())
                         .map(|file_path| (file_path, file_path_to_req_path(file_path)))
@@ -241,9 +243,8 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                 
                 let load_and_serve_file = {
                     let mut server = server.clone();
-                    move |event: Result<Event> | {
-                        let Some(event) = event.ok() else { return };
-                        for file_path in event.paths {
+                    move |paths: Vec<PathBuf> | {
+                        for file_path in paths {
                             let file_path = file_path.as_path();
                             let Some(req_path) = file_path.to_str().map(file_path_to_req_path) else { continue };
                             if req_path == "/index.html" { continue }; // index.html is handled in another watcher, so skip it.
@@ -266,8 +267,8 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                     let mut server = server.clone();
                     move || {
                         let Ok(index_html) = fs::read(&proj_html_path) else { return };
-                        let index_html       = from_utf8(&index_html).expect("index.html is not utf8 encoded.");
-                        let index_html       = format!("{}\n<script type=\"module\">{}</script>",index_html, index_js); 
+                        let index_html     = from_utf8(&index_html).expect("index.html is not utf8 encoded.");
+                        let index_html     = format!("{}\n<script type=\"module\">{}</script>",index_html, index_js); 
                         let file_did_update = {
                             server.config.write().unwrap()
                             .on_get_request("/index.html")
@@ -287,11 +288,11 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                 build_load_and_serve_app();
 
                 let _watchers = if watch { Some((
-                    make_watcher(Path::new(proj_static_path), load_and_serve_file)
+                    make_watcher(&proj_static_path, move |paths| { load_and_serve_file(paths); })
                         .expect("Unable to watch static files folder, required for hot-reload when updated."),
-                    make_watcher(Path::new(proj_src_path), move |_| { build_load_and_serve_app(); })
+                    make_watcher(&proj_src_path,    move |_|     { build_load_and_serve_app(); })
                         .expect("Unable to watch src folder, required for hot-reload."),
-                    make_watcher(Path::new(proj_html_path), move |_| load_and_serve_index_html()),
+                    make_watcher(&proj_html_path,   move |_|     { load_and_serve_index_html(); }),
                         // Providing a custom index.html is optional, so open watcher is allowed to fail silently here.
                 ))} else { None };
 

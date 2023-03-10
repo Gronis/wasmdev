@@ -83,7 +83,7 @@ impl TryInto<BuildConfig> for AttrConfig {
 /// Build all web assets and put it in target/dist/{proj_name}
 #[cfg(not(target_family = "wasm"))]
 pub(crate) fn build_all_web_assets(config: &BuildConfig) -> Result<TokenStream, TokenStream> {
-    use wasmdev_core::{build_wasm, minify_javascript, find_files};
+    use wasmdev_core::{build_wasm, minify_javascript, list_files_recursively};
     
     let Some(_)       = build_wasm(&config.wasm_path, config.is_release, &config.target_path)
                             else { return compiler_error!("Failed to build wasm target") };
@@ -105,7 +105,7 @@ pub(crate) fn build_all_web_assets(config: &BuildConfig) -> Result<TokenStream, 
         fs::write(format!("{dist_path}/index.js"), js_code)?;
         fs::write(format!("{dist_path}/index.html"), html_code)?;
 
-        let file_paths = find_files(&config.proj_static_path);
+        let file_paths = list_files_recursively(&config.proj_static_path)?;
         let file_path_iter = file_paths.iter()
             .filter_map(|p| p.to_str())
             .filter(|p| !p.ends_with(".rs"))          // Don't export src files.
@@ -113,7 +113,7 @@ pub(crate) fn build_all_web_assets(config: &BuildConfig) -> Result<TokenStream, 
 
         // Clean up old files that were removed since last build:
         {
-            let old_files = find_files(&dist_path);
+            let old_files = list_files_recursively(&dist_path)?;
             let mut old_file_paths: HashSet<_> = old_files.iter()
                 .filter_map(|p| p.to_str())
                 .map(|p| p.to_string().replace(dist_path, ""))

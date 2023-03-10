@@ -18,7 +18,7 @@ pub struct Endpoint{
     response_action: Option<ResponseAction>,
 }
 
-pub struct EndpointHasResponse {}
+pub enum EndpointHasResponse {}
 pub trait EndpointBuilderHasResponse {
     /// Build the endpoint. Returns true if endpoint body did change.
     fn build(self) -> bool;
@@ -26,7 +26,7 @@ pub trait EndpointBuilderHasResponse {
     fn add_response_headers(self, headers: Vec<Header>) -> Self;
 }
 
-pub struct EndpointNoResponse {}
+pub enum EndpointNoResponse {}
 pub trait EndpointBuilderNoResponse<'a> : EndpointBuilderHasResponse {
     fn internal_redirect(self, path: &'a str) -> EndpointBuilder<'a, EndpointHasResponse>;
     fn set_response_body(self, body: Vec<u8>) -> EndpointBuilder<'a, EndpointHasResponse>;

@@ -24,7 +24,7 @@ pub fn remove_empty_dirs<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
 /// Same as fs::create_dir_all, but only up to the parent
 pub fn create_parent_dir_all<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
     let path = path.as_ref();
-    let path = path.parent().ok_or(std::io::Error::new(std::io::ErrorKind::Other, "Unable to get parent directory"))?;
+    let path = path.parent().ok_or(std::io::Error::new(std::io::ErrorKind::NotFound, "Unable to get parent directory"))?;
     fs::create_dir_all(path)
 }
 
