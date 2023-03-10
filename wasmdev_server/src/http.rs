@@ -1,6 +1,6 @@
 mod error;
 mod header;
-mod helper;
+mod helpers;
 mod request;
 mod response;
 mod server;
@@ -9,7 +9,7 @@ mod version;
 
 pub use self::error::*;
 pub use self::header::*;
-pub use self::helper::*;
+pub use self::helpers::*;
 pub use self::request::*;
 pub use self::response::*;
 pub use self::server::*;

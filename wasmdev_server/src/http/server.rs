@@ -10,7 +10,7 @@ use std::thread;
 
 use crate::utils::{defer, hash_bytes};
 use crate::http::{Header, StatusCode};
-use crate::http::helper::*;
+use crate::http::helpers::*;
 
 #[derive(PartialEq)]
 pub struct Endpoint{
