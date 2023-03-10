@@ -8,7 +8,7 @@ use std::path::Path;
 use std::sync::{Arc, RwLock};
 use std::thread;
 
-use crate::utils::{defer, simple_hash};
+use crate::utils::{defer, hash_bytes};
 use crate::http::{Header, StatusCode};
 use crate::http::helper::*;
 
@@ -76,14 +76,14 @@ impl <'a, T> EndpointBuilderHasResponse for EndpointBuilder<'a, T> {
             }
         }
         let endpoint_hash = match &endpoint.response_action {
-            Some(ResponseAction::Content(body)) => Some(simple_hash(body)),
+            Some(ResponseAction::Content(body)) => Some(hash_bytes(body)),
             _ => None,
         };
         let Some(old_endpoint) = self.server_config.endpoints.insert(self.path.into(), endpoint) else {
             return true;
         };
         let old_endpoint_hash = match &old_endpoint.response_action {
-            Some(ResponseAction::Content(body)) => Some(simple_hash(body)),
+            Some(ResponseAction::Content(body)) => Some(hash_bytes(body)),
             _ => None,
         };
         // Does not check headers, only response body. Might need to change in the future.
@@ -250,7 +250,6 @@ impl Server{
                                 
                             }
                         };
-                        let Ok(resp) = resp.map_err(|err| println!("{}", err)) else { continue };
                         write_response(&mut writer, &resp)
                     };
                     let Ok(_) = send_ok.map_err(|err| println!("{}", err)) else { continue };

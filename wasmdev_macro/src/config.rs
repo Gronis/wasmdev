@@ -83,15 +83,15 @@ impl TryInto<BuildConfig> for AttrConfig {
 /// Build all web assets and put it in target/dist/{proj_name}
 #[cfg(not(target_family = "wasm"))]
 pub(crate) fn build_all_web_assets(config: &BuildConfig) -> Result<TokenStream, TokenStream> {
-    use wasmdev_core::{build_wasm, minify_javascript, list_files_recursively};
+    use wasmdev_core::{fs::list_files_recursively, code};
     
-    let Some(_)       = build_wasm(&config.wasm_path, config.is_release, &config.target_path)
+    let Some(_)       = code::build_wasm(&config.wasm_path, config.is_release, &config.target_path)
                             else { return compiler_error!("Failed to build wasm target") };
     let Ok(wasm_code) = fs::read(&config.index_wasm_path)
                             else { return compiler_error!("Failed to read wasm code from {}", config.index_wasm_path) };
     let Ok(js_code)   = fs::read(&config.index_js_path)
                             else { return compiler_error!("Failed to read js code from {}", config.index_js_path) };
-    let js_code       = minify_javascript(&js_code);
+    let js_code       = code::minify_javascript(&js_code);
     let dist_path     = &format!("target/dist/{}", config.proj_name);
     let html_code = (|| -> Option<String>{
         let html_code = fs::read(&config.proj_html_path).ok()?;
@@ -135,7 +135,7 @@ pub(crate) fn build_all_web_assets(config: &BuildConfig) -> Result<TokenStream, 
         for file_path in file_path_iter {
             let file_contents = fs::read(file_path)?;
             let file_contents = if file_path.ends_with(".js") { 
-                minify_javascript(&file_contents)
+                code::minify_javascript(&file_contents)
             } else { file_contents };
             let file_rel_path = file_path.replace(&config.proj_static_path, "");
             let file_dist_path = format!("{dist_path}/{file_rel_path}");

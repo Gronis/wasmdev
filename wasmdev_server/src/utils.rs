@@ -1,8 +1,6 @@
 use std::path::{Path, PathBuf};
-#[cfg(not(target_family = "wasm"))]
-pub use wasmdev_core::*;
 
-pub fn simple_hash(bin: &[u8]) -> u32 {
+pub fn hash_bytes(bin: &[u8]) -> u32 {
     let mut a = 1u32;
     let mut b = 1u32;
     let mut res = 0u32;
@@ -44,7 +42,7 @@ pub fn make_watcher<P: AsRef<Path>>(path: P, mut event_handler: impl EventHandle
 
     let hash_event = |event: &Event| event.paths.iter()
         .filter_map(|p| p.to_str())
-        .map(|s| simple_hash(s.as_bytes()))
+        .map(|s| hash_bytes(s.as_bytes()))
         .fold(0u32, |sum, v| sum.wrapping_add(v));
 
     {

@@ -6,6 +6,9 @@ pub mod http;
 pub mod utils;
 
 #[cfg(not(target_family = "wasm"))]
+pub use wasmdev_core::*;
+
+#[cfg(not(target_family = "wasm"))]
 pub use http::{Server, ServerConfig};
 
 #[cfg(not(target_family = "wasm"))]

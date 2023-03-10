@@ -40,13 +40,13 @@ pub fn make_websocket_accept_response(request: &Request) -> Result<Response, Str
         }).ok_or("Unable to create websocket upgrade response from request".into())
 }
 
-pub fn make_http_response(status_code: StatusCode, headers: Vec<Header>, body: Option<&Vec<u8>>) -> Result<Response, String> {
-    Ok(Response {
+pub fn make_http_response(status_code: StatusCode, headers: Vec<Header>, body: Option<&Vec<u8>>) -> Response {
+    Response {
         version: Version::V1_1,
         status_code, 
         headers,
         body,
-    })
+    }
 }
 
 pub fn parse_request<T: Read>(reader: &mut BufReader<T>) -> Result<Request, String>{
@@ -63,7 +63,7 @@ pub fn parse_request<T: Read>(reader: &mut BufReader<T>) -> Result<Request, Stri
         }) else { return Err("Message in buffer is incomplete".into()) };
         
     let msg = from_utf8(&reader.buffer()[0..end_index]).map_err(|_| "Unable to parse utf8 string")?;
-    let request: Request = msg.parse().map_err(|err| dbg!(err)).map_err(|_| "Unable to parse http request")?;
+    let request: Request = msg.parse().map_err(|_| "Unable to parse http request")?;
     reader.consume(end_index + 4); // Consume end-of-message
     Ok(request)
 }

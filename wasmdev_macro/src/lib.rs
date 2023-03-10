@@ -157,7 +157,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                 use std::fs;
                 use wasmdev::prelude::*;
                 use wasmdev::{Server, ServerConfig};
-                use wasmdev::utils::{build_wasm, minify_javascript, make_watcher, list_files_recursively};
+                use wasmdev::{code, utils::make_watcher, fs::list_files_recursively};
 
                 let is_release       = #is_release;
                 let index_html       = #index_html;
@@ -195,10 +195,10 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                     let mut server = server.clone();
                     move || -> Option<()>{
                         println!("\x1b[1m\x1b[92m    Building\x1b[0m wasm target");
-                        let _         = build_wasm(wasm_path, is_release, target_path)?;
+                        let _         = code::build_wasm(wasm_path, is_release, target_path)?;
                         let wasm_code = fs::read(&index_wasm_path).ok()?;
                         let js_code   = fs::read(&index_js_path).ok()?;
-                        let js_code   = if is_release { minify_javascript(&js_code) } else { js_code };
+                        let js_code   = if is_release { code::minify_javascript(&js_code) } else { js_code };
                         let code_did_update = {
                             let mut server_config = server.config.write().unwrap();
                             server_config
