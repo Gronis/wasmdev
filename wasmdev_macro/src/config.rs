@@ -3,7 +3,8 @@ use std::{env, str::from_utf8, fs, collections::HashSet};
 use proc_macro2::{TokenStream, TokenTree, Span};
 use quote::quote;
 
-use crate::util::*;
+use crate::core;
+use crate::helpers::*;
 
 pub(crate) struct Attr<T> {
     pub(crate) value: T,
@@ -129,7 +130,7 @@ pub(crate) fn build_all_web_assets(config: &BuildConfig) -> Result<TokenStream, 
             for file_path in files_to_remove {
                 fs::remove_file(file_path)?;
             }
-            remove_empty_dirs(&dist_path)?;
+            core::fs::remove_empty_dirs(&dist_path)?;
         }
 
         for file_path in file_path_iter {
@@ -139,7 +140,7 @@ pub(crate) fn build_all_web_assets(config: &BuildConfig) -> Result<TokenStream, 
             } else { file_contents };
             let file_rel_path = file_path.replace(&config.proj_static_path, "");
             let file_dist_path = format!("{dist_path}/{file_rel_path}");
-            create_parent_dir_all(&file_dist_path)?;
+            core::fs::create_parent_dir_all(&file_dist_path)?;
             fs::write(file_dist_path, file_contents)?;
         }
         // Abuse "include_bytes" to make sure static web assets invalidate cargo build cache

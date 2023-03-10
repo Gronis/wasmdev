@@ -3,11 +3,13 @@ use proc_macro2::{TokenStream, Span};
 use quote::quote;
 use std::env;
 
-mod util;
+mod helpers;
 mod config;
 
-use util::*;
+use helpers::*;
 use config::*;
+
+pub(crate) use wasmdev_core as core;
 
 ///
 /// Turns the main function for non-`wasm` targets into a development web-server.
@@ -157,7 +159,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                 use std::fs;
                 use wasmdev::prelude::*;
                 use wasmdev::{Server, ServerConfig};
-                use wasmdev::{code, utils::make_watcher, fs::list_files_recursively};
+                use wasmdev::{core, utils::make_watcher};
 
                 let is_release       = #is_release;
                 let index_html       = #index_html;
@@ -195,10 +197,10 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                     let mut server = server.clone();
                     move || -> Option<()>{
                         println!("\x1b[1m\x1b[92m    Building\x1b[0m wasm target");
-                        let _         = code::build_wasm(wasm_path, is_release, target_path)?;
+                        let _         = core::code::build_wasm(wasm_path, is_release, target_path)?;
                         let wasm_code = fs::read(&index_wasm_path).ok()?;
                         let js_code   = fs::read(&index_js_path).ok()?;
-                        let js_code   = if is_release { code::minify_javascript(&js_code) } else { js_code };
+                        let js_code   = if is_release { core::code::minify_javascript(&js_code) } else { js_code };
                         let code_did_update = {
                             let mut server_config = server.config.write().unwrap();
                             server_config
@@ -222,7 +224,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                     path.replace(proj_static_path, "").replace("\\", "/");
 
                 let serve_static_files = || {
-                    let file_paths = list_files_recursively(proj_static_path)
+                    let file_paths = core::fs::list_files_recursively(proj_static_path)
                         .expect(&format!("Unable to list static assets: '{}'", proj_static_path));
                     let file_and_req_path_iter = file_paths.iter()
                         .filter_map(|file_path| file_path.to_str())
