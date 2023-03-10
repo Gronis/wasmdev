@@ -27,9 +27,9 @@ Compiling my-web-app
  Building wasm target
 Compiling my-web-app
  Finished dev [unoptimized + debuginfo] target(s)
-          ┏━━━━━━━━━━━━━━━━━━━━━━━━━┓
-  Serving ┃  http://127.0.0.1:8080  ┃ <= Click to open your app!
-          ┗━━━━━━━━━━━━━━━━━━━━━━━━━┛
+          ┏━━━━━━━━━━━━━━━━━━━━━━━┓
+  Serving ┃ http://127.0.0.1:8080 ┃ <= Click to open your app!
+          ┗━━━━━━━━━━━━━━━━━━━━━━━┛
 ```
 
 # Project Goal
