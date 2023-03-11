@@ -1,7 +1,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-use super::error::ParseError;
+use super::error::*;
 
 #[derive(Clone, PartialEq)]
 pub enum Header{
@@ -14,16 +14,18 @@ pub enum Header{
     SecWebSocketAccept(String),
     ContentLength(usize),
     ContentType(String),
+    Unsupported,
 }
 impl Header{
-    pub fn host (s: &str) -> Header { Header::Host(s.to_string()) }
-    pub fn connection (s: &str) -> Header { Header::Connection(s.to_string()) }
-    pub fn upgrade (s: &str) -> Header { Header::Upgrade(s.to_string()) }
-    pub fn sec_websocket_key (s: &str) -> Header { Header::SecWebSocketKey(s.to_string()) }
+    pub fn host (s: &str) -> Header { Header::Host(s.into()) }
+    pub fn connection (s: &str) -> Header { Header::Connection(s.into()) }
+    pub fn upgrade (s: &str) -> Header { Header::Upgrade(s.into()) }
+    pub fn sec_websocket_key (s: &str) -> Header { Header::SecWebSocketKey(s.into()) }
     pub fn sec_websocket_version (i: i32) -> Header { Header::SecWebSocketVersion(i) }
-    pub fn sec_websocket_extensions (s: &str) -> Header { Header::SecWebSocketExtensions(s.to_string()) }
-    pub fn sec_websocket_accept (s: &str) -> Header { Header::SecWebSocketAccept(s.to_string()) }
-    pub fn content_length (s: &str) -> Result<Header, ParseError> { Ok(Header::ContentLength(s.parse()?))}
+    pub fn sec_websocket_extensions (s: &str) -> Header { Header::SecWebSocketExtensions(s.into()) }
+    pub fn sec_websocket_accept (s: &str) -> Header { Header::SecWebSocketAccept(s.into()) }
+    pub fn content_length (s: &str) -> Result<Header> { Ok(Header::ContentLength(s.parse()?))}
+    pub fn content_type (s: &str) -> Header { Header::ContentType(s.into())}
 }
 
 impl fmt::Display for Header {
@@ -38,17 +40,19 @@ impl fmt::Display for Header {
             Header::SecWebSocketAccept(s) => write!(f, "Sec-WebSocket-Accept: {}", s),
             Header::ContentLength(s) => write!(f, "Content-Length: {}", s),
             Header::ContentType(s) => write!(f, "Content-Type: {}", s),
+            Header::Unsupported => write!(f, "Unsupported Header"),
         }
     }
 }
 
 impl FromStr for Header{
-    type Err = ParseError;
+    type Err = Error;
     #[inline]
-    fn from_str(s: &str) -> Result<Header, ParseError> {
-        let (header, value) = s.split_at(s.find(':').ok_or(ParseError)?);
+    fn from_str(s: &str) -> Result<Header> {
+        let (header, value) = s.split_at(s.find(':')
+            .ok_or(Error::format_error(format!("Unable to parse header '{s}'")))?);
         let value = &value[1..].trim();
-        let parse_version = |v : &str | v.parse::<i32>().or(Err(ParseError));
+        let parse_version = |v : &str | v.parse::<i32>();
         match header.to_ascii_lowercase().as_str() {
             "host" => Ok(Header::host(value)),
             "connection" => Ok(Header::connection(value)),
@@ -58,8 +62,8 @@ impl FromStr for Header{
             "sec-websocket-extensions" => Ok(Header::sec_websocket_extensions(value)),
             "sec-websocket-accept" => Ok(Header::sec_websocket_accept(value)),
             "content-length" => Ok(Header::content_length(value)?),
-            "content-type" => todo!(),
-            _ => Err(ParseError)
+            "content-type" => Ok(Header::content_type(value)),
+            _ => Ok(Header::Unsupported)
         }
     }
 }

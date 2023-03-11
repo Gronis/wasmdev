@@ -1,7 +1,8 @@
 use std::fmt;
 use std::str::FromStr;
 
-use super::error::ParseError;
+use super::HttpErrorKind;
+use super::error::Error;
 
 pub enum Version{ V1_0, V1_1 }
 impl fmt::Display for Version {
@@ -14,13 +15,13 @@ impl fmt::Display for Version {
     }
 }
 impl FromStr for Version{
-    type Err = ParseError;
+    type Err = Error;
     #[inline]
-    fn from_str(s: &str) -> Result<Version, ParseError> {
+    fn from_str(s: &str) -> Result<Version, Error> {
         match s.to_ascii_uppercase().as_str() {
             "HTTP/1.0" => Ok(Version::V1_0),
             "HTTP/1.1" => Ok(Version::V1_1),
-            _ => Err(ParseError)
+            _ => Err(HttpErrorKind::UnsupportedVersionError.into())
         }
     }
 }

@@ -3,7 +3,7 @@ use std::str::FromStr;
 use std::slice::Iter;
 
 use super::{Version, Header, write_headers};
-use super::error::ParseError;
+use super::error::*;
 
 
 pub enum RequestType{ GET, PUT, POST, DELETE }
@@ -18,15 +18,15 @@ impl fmt::Display for RequestType {
     }
 }
 impl FromStr for RequestType{
-    type Err = ParseError;
+    type Err = Error;
     #[inline]
-    fn from_str(s: &str) -> Result<RequestType, ParseError> {
+    fn from_str(s: &str) -> Result<RequestType> {
         match s.to_ascii_uppercase().as_str() {
             "GET" => Ok(RequestType::GET),
             "PUT" => Ok(RequestType::PUT),
             "POST" => Ok(RequestType::POST),
             "DELETE" => Ok(RequestType::DELETE),
-            _ => Err(ParseError)
+            _ => Err(HttpErrorKind::UnsupportedReqTypeError.into())
         }
     }
 }
@@ -53,15 +53,16 @@ impl fmt::Display for Request {
 }
 
 impl FromStr for Request{
-    type Err = ParseError;
+    type Err = Error;
     #[inline]
-    fn from_str(s: &str) -> Result<Request, ParseError> {(|| {
+    fn from_str(s: &str) -> Result<Request> {(|| {
         let mut lines = s.split("\r\n");
         let mut words = lines.next()?.split(" ");
         let request_type: RequestType = words.next()?.parse().ok()?;
         let path                      = words.next()?.to_string();
         let version: Version          = words.next()?.parse().ok()?;
         let headers: Vec<Header> = lines
+            // FIXME: If header fails to parse here, maybe the whole request should fail.
             .filter_map(|s| s.parse::<Header>().ok())
             .collect();
         Some(Request {
@@ -70,5 +71,5 @@ impl FromStr for Request{
             version,
             headers,
         })
-    })().ok_or(ParseError)}
+    })().ok_or(Error::format_error(format!("unable to parse request: '{s}'")))}
 }

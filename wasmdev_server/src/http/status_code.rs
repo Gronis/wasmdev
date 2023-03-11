@@ -1,7 +1,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-use super::error::ParseError;
+use super::error::*;
 
 
 pub struct StatusCode (pub i32);
@@ -21,9 +21,9 @@ impl fmt::Display for StatusCode {
 }
 
 impl FromStr for StatusCode{
-    type Err = ParseError;
+    type Err = Error;
     #[inline]
-    fn from_str(s: &str) -> Result<StatusCode, ParseError> {
+    fn from_str(s: &str) -> Result<StatusCode> {
         Ok(StatusCode(s.parse::<i32>()?))
     }
 }
