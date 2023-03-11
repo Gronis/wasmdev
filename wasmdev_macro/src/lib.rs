@@ -142,7 +142,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
     let static_asset_cache = if build_wasm_now { 
         build_all_web_assets(&config)? 
     } else { 
-        quote! {} // If we don't bulid web assets at compile-time, we don't a cache
+        quote! {} // If we don't bulid web assets at compile-time, we don't need a cache
     };
 
     Ok(quote!{
