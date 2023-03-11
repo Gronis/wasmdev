@@ -85,6 +85,23 @@ impl TryInto<BuildConfig> for AttrConfig {
 #[cfg(not(target_family = "wasm"))]
 pub(crate) fn build_all_web_assets(config: &BuildConfig) -> Result<TokenStream, TokenStream> {
     use wasmdev_core::{fs::list_files_recursively, code};
+
+    enum Error{
+        CompilerError(TokenStream),
+        IOError(std::io::Error),
+    }
+
+    impl From<std::io::Error> for Error {
+        fn from(err: std::io::Error) -> Self {
+            Error::IOError(err)
+        }
+    }
+
+    impl From<TokenStream> for Error {
+        fn from(err: TokenStream) -> Self {
+            Error::CompilerError(err)
+        }
+    }
     
     let Some(_)       = code::build_wasm(&config.wasm_path, config.is_release, &config.target_path)
                             else { return compiler_error!("Failed to build wasm target") };
@@ -92,7 +109,8 @@ pub(crate) fn build_all_web_assets(config: &BuildConfig) -> Result<TokenStream, 
                             else { return compiler_error!("Failed to read wasm code from {}", config.index_wasm_path) };
     let Ok(js_code)   = fs::read(&config.index_js_path)
                             else { return compiler_error!("Failed to read js code from {}", config.index_js_path) };
-    let js_code       = code::minify_javascript(&js_code);
+    let Some(js_code) = code::minify_javascript(&js_code)
+                            else { return compiler_error!("Failed to minify js code") };
     let dist_path     = &format!("target/dist/{}", config.proj_name);
     let html_code = (|| -> Option<String>{
         let html_code = fs::read(&config.proj_html_path).ok()?;
@@ -100,7 +118,7 @@ pub(crate) fn build_all_web_assets(config: &BuildConfig) -> Result<TokenStream, 
         Some(format!("{}\n<script type=\"module\">{}</script>", html_code, config.index_js))
     })().unwrap_or(config.index_html.clone());
 
-    match (|| -> Result<TokenStream, std::io::Error> {
+    match (|| -> Result<TokenStream, Error> {
         let _ = fs::create_dir_all(dist_path);
         fs::write(format!("{dist_path}/index.wasm"), wasm_code)?;
         fs::write(format!("{dist_path}/index.js"), js_code)?;
@@ -136,7 +154,10 @@ pub(crate) fn build_all_web_assets(config: &BuildConfig) -> Result<TokenStream, 
         for file_path in file_path_iter {
             let file_contents = fs::read(file_path)?;
             let file_contents = if file_path.ends_with(".js") { 
-                code::minify_javascript(&file_contents)
+                match code::minify_javascript(&file_contents) {
+                    Some(code) => Ok(code),
+                    None => compiler_error!("Unable to minify js file: '{file_path}'"),
+                }?
             } else { file_contents };
             let file_rel_path = file_path.replace(&config.proj_static_path, "");
             let file_dist_path = format!("{dist_path}/{file_rel_path}");
@@ -152,8 +173,11 @@ pub(crate) fn build_all_web_assets(config: &BuildConfig) -> Result<TokenStream, 
         eprintln!("\x1b[1m\x1b[92m    Finished\x1b[0m release artifacts in: '{dist_path}'");
         Ok(tt_invalidate_static_asset_cache)
     })() {
-        Ok(tt)   => Ok(tt),
-        Err(msg) => return compiler_error!("Failed to build project '{}' , {msg}", config.proj_name),
+        Ok(ts)   => Ok(ts),
+        Err(err) => match err {
+            Error::IOError(msg) => return compiler_error!("Failed to build project '{}' , {msg}", config.proj_name),
+            Error::CompilerError(ts) => Ok(ts),
+        }
     }
 }
 

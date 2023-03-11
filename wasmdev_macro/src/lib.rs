@@ -200,7 +200,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                         let _         = core::code::build_wasm(wasm_path, is_release, target_path)?;
                         let wasm_code = fs::read(&index_wasm_path).ok()?;
                         let js_code   = fs::read(&index_js_path).ok()?;
-                        let js_code   = if is_release { core::code::minify_javascript(&js_code) } else { js_code };
+                        let js_code   = if is_release { core::code::minify_javascript(&js_code)? } else { js_code };
                         let code_did_update = {
                             let mut server_config = server.config.write().unwrap();
                             server_config

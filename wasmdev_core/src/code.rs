@@ -18,7 +18,7 @@ pub fn build_wasm<P1: AsRef<Path>, P2: AsRef<Path>>(input_path: P1, is_release: 
         let _env_guard = sh.push_env("CARGO_WASMDEV", "1");
         cmd!(sh, "cargo build").args(args).quiet().run().ok()?;
     }
-    let output_path = input_path.as_ref().parent().expect("No parent when building wasm");
+    let output_path = input_path.as_ref().parent()?;
     Bindgen::new()
         .input_path(&input_path)
         .web(true)
@@ -30,9 +30,9 @@ pub fn build_wasm<P1: AsRef<Path>, P2: AsRef<Path>>(input_path: P1, is_release: 
         .generate(output_path).map_err(|err| println!("{}", err)).ok()
 }
 
-pub fn minify_javascript(code_in: &[u8]) -> Vec<u8>{
+pub fn minify_javascript(code_in: &[u8]) -> Option<Vec<u8>>{
     let session = Session::new();
     let mut code_out = vec![];
-    minify(&session, TopLevelMode::Module, code_in, &mut code_out).unwrap();
-    code_out
+    minify(&session, TopLevelMode::Module, code_in, &mut code_out).ok()?;
+    Some(code_out)
 } 
