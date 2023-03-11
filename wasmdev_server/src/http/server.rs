@@ -200,6 +200,8 @@ impl Server{
             let peer_addr = stream.peer_addr()?;
             let config = self.config.clone();
             let clients = self.clients.clone();
+            // FIXME: Decouple the server logic from the tcp-stream dependency
+            // Any struct with Read and Write capability should be enough.
             let mut reader = BufReader::new(stream.try_clone()?);
             let mut writer = BufWriter::new(stream);
 

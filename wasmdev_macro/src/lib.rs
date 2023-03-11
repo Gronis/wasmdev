@@ -154,7 +154,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
             // Scope all this in order to not pollute main fn scope.
             {
                 use std::net::TcpListener;
-                use std::path::{Path, PathBuf};
+                use std::path::PathBuf;
                 use std::str::from_utf8;
                 use std::fs;
                 use wasmdev::prelude::*;
