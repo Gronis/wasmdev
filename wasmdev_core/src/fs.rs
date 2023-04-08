@@ -1,13 +1,12 @@
 
-use std::io;
+use std::io::{Result, Error, ErrorKind};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// Recusivly list files 3-layers down.
-pub fn list_files_recursively(path: impl AsRef<Path>) -> io::Result<Vec<PathBuf>> {
+/// Recusivly list files in directory
+pub fn list_files_recursively(path: impl AsRef<Path>) -> Result<Vec<PathBuf>> {
     let mut files = vec![];
-    let mut paths = vec![path.as_ref().to_path_buf()];
-    let mut traverse = |paths_in: &mut Vec<PathBuf>| -> io::Result<Vec<PathBuf>> {
+    let mut traverse = |paths_in: &mut Vec<PathBuf>| -> Result<Vec<PathBuf>> {
         let mut paths_out = vec![];
         for path in paths_in.drain(..) {
             for entry in fs::read_dir(path)? {
@@ -23,16 +22,16 @@ pub fn list_files_recursively(path: impl AsRef<Path>) -> io::Result<Vec<PathBuf>
         Ok(paths_out)
     };
 
-    // Recurse 3 layers down
-    let mut paths = traverse(&mut paths)?;
-    let mut paths = traverse(&mut paths)?;
-    let _         = traverse(&mut paths)?;
-
+    let mut paths = vec![path.as_ref().to_path_buf()];
+    for _ in 0..256 { // Avoid infinite loop for linked files/dirs
+        if paths.len() == 0 { break }
+        paths = traverse(&mut paths)?;
+    }
     Ok(files)
 }
 
-/// Removes all directories in this directory that has no children
-pub fn remove_empty_dirs(path: impl AsRef<Path>) -> std::io::Result<()> {
+/// Clears all empty directories recursivly
+pub fn remove_empty_dirs(path: impl AsRef<Path>) -> Result<()> {
     let path = path.as_ref();
     if path.is_dir() {
         for entry in fs::read_dir(path)? {
@@ -50,9 +49,9 @@ pub fn remove_empty_dirs(path: impl AsRef<Path>) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Same as fs::create_dir_all, but only up to the parent
-pub fn create_parent_dir_all(path: impl AsRef<Path>) -> std::io::Result<()> {
+/// Same as std::fs::create_dir_all, but only up to the parent
+pub fn create_parent_dir_all(path: impl AsRef<Path>) -> Result<()> {
     let path = path.as_ref();
-    let path = path.parent().ok_or(std::io::Error::new(std::io::ErrorKind::NotFound, "Unable to get parent directory"))?;
+    let path = path.parent().ok_or(Error::new(ErrorKind::NotFound, "Unable to get parent directory"))?;
     fs::create_dir_all(path)
 }

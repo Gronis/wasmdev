@@ -27,7 +27,8 @@ pub fn build_wasm(input_path: impl AsRef<Path>, is_release: bool, target_dir: im
         .debug(!is_release)
         .remove_name_section(is_release)
         .remove_producers_section(is_release)
-        .generate(output_path).map_err(|err| println!("{}", err)).ok()
+        .generate(output_path)
+        .map_err(|err| println!("{}", err)).ok()
 }
 
 pub fn minify_javascript(code_in: &[u8]) -> Option<Vec<u8>>{

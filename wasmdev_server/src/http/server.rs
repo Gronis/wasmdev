@@ -184,7 +184,10 @@ pub struct Server {
 
 impl Server{
     pub fn new() -> Self {
-        Server { config: Arc::new(RwLock::new(ServerConfig::new())), clients: Arc::new(RwLock::new(vec![])) }
+        Server {
+            config: Arc::new(RwLock::new(ServerConfig::new())),
+            clients: Arc::new(RwLock::new(vec![])),
+        }
     }
     #[inline]
     pub fn configure<R>(&self, f: impl FnOnce(&mut ServerConfig) -> R) -> R {
