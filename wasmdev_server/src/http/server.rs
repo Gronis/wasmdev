@@ -178,13 +178,17 @@ pub struct Client {
 
 #[derive(Clone)]
 pub struct Server {
-    pub config: Arc<RwLock<ServerConfig>>,
+    config: Arc<RwLock<ServerConfig>>,
     clients: Arc<RwLock<Vec<Client>>>,
 }
 
 impl Server{
     pub fn new() -> Self {
         Server { config: Arc::new(RwLock::new(ServerConfig::new())), clients: Arc::new(RwLock::new(vec![])) }
+    }
+    #[inline]
+    pub fn configure<R>(&self, f: impl FnOnce(&mut ServerConfig) -> R) -> R {
+        f(&mut self.config.write().unwrap())
     }
     pub fn broadcast(&self, msg: &[u8]) {
         for client in self.clients.read().unwrap().iter() {

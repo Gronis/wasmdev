@@ -181,17 +181,16 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                 #wasm_main_fn_ident;
 
                 let server = Server::new();
-                {
-                    let mut server_config = server.config.write().unwrap();
-                    server_config
+                server.configure(|config| {
+                    config
                         .on_get_request("/")
                         .internal_redirect("/index.html")
                         .build();
-                    server_config
+                    config
                         .on_get_request("/index.html")
                         .set_response_body(index_html.as_bytes().to_vec())
                         .build();
-                }
+                });
 
                 let build_load_and_serve_app = {
                     let mut server = server.clone();
@@ -201,17 +200,16 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                         let wasm_code = fs::read(&index_wasm_path).ok()?;
                         let js_code   = fs::read(&index_js_path).ok()?;
                         let js_code   = if is_release { core::code::minify_javascript(&js_code)? } else { js_code };
-                        let code_did_update = {
-                            let mut server_config = server.config.write().unwrap();
-                            server_config
+                        let code_did_update = server.configure(|config| {
+                            config
                                 .on_get_request("/index.js")
                                 .set_response_body(js_code)
                                 .build();
-                            server_config
+                            config
                                 .on_get_request("/index.wasm")
                                 .set_response_body(wasm_code)
                                 .build()
-                        };
+                        });
                         if code_did_update {
                             println!("\x1b[1m\x1b[92m     Serving\x1b[0m /index.wasm, /index.js");
                             server.broadcast("reload /index.wasm".as_bytes());
@@ -230,14 +228,13 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                         .filter_map(|file_path| file_path.to_str())
                         .map(|file_path| (file_path, file_path_to_req_path(file_path)))
                         .filter(|(_, req_path)| *req_path != "/index.html");
-                    {
-                        let mut conf = server.config.write().unwrap();
+                    server.configure(|conf| {
                         for (file_path, req_path) in file_and_req_path_iter.clone(){
                             conf.on_get_request(&req_path)
                                 .lazy_load(file_path)
                                 .build();
                         }
-                    }
+                    });
                     for (_, req_path) in file_and_req_path_iter{
                         println!("\x1b[1m\x1b[92m     Serving\x1b[0m {}", req_path);
                     }
@@ -251,12 +248,11 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                             let Some(req_path) = file_path.to_str().map(file_path_to_req_path) else { continue };
                             if req_path == "/index.html" { continue }; // index.html is handled in another watcher, so skip it.
                             let Ok(file_contents) = fs::read(file_path) else { continue };
-                            let file_did_update = {
-                                server.config.write().unwrap()
-                                    .on_get_request(&req_path)
-                                    .set_response_body(file_contents)
-                                    .build()
-                            };
+                            let file_did_update = server.configure(|config| config
+                                .on_get_request(&req_path)
+                                .set_response_body(file_contents)
+                                .build()
+                            );
                             if file_did_update {
                                 println!("\x1b[1m\x1b[92m     Serving\x1b[0m {}", req_path);
                                 server.broadcast(format!("reload {}", req_path).as_bytes());
@@ -271,12 +267,11 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                         let Ok(index_html) = fs::read(&proj_html_path) else { return };
                         let index_html     = from_utf8(&index_html).expect("index.html is not utf8 encoded.");
                         let index_html     = format!("{}\n<script type=\"module\">{}</script>",index_html, index_js); 
-                        let file_did_update = {
-                            server.config.write().unwrap()
+                        let file_did_update = server.configure(|config| config
                             .on_get_request("/index.html")
                             .set_response_body(index_html.as_bytes().to_vec())
                             .build()
-                        };
+                        );
                         if file_did_update {
                             println!("\x1b[1m\x1b[92m     Serving\x1b[0m /index.html");
                             server.broadcast("reload /index.html".as_bytes());

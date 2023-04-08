@@ -3,7 +3,7 @@ use minify_js::{Session, TopLevelMode, minify};
 use xshell::{Shell, cmd};
 use wasm_bindgen_cli_support::Bindgen;
 
-pub fn build_wasm<P1: AsRef<Path>, P2: AsRef<Path>>(input_path: P1, is_release: bool, target_dir: P2) -> Option<()> {
+pub fn build_wasm(input_path: impl AsRef<Path>, is_release: bool, target_dir: impl AsRef<Path>) -> Option<()> {
     let target_dir = target_dir.as_ref().to_str()?;
     let mut args = vec![
         "--target", "wasm32-unknown-unknown",

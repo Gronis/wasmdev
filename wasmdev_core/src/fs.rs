@@ -4,7 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Recusivly list files 3-layers down.
-pub fn list_files_recursively<P: AsRef<Path>>(path: P) -> io::Result<Vec<PathBuf>> {
+pub fn list_files_recursively(path: impl AsRef<Path>) -> io::Result<Vec<PathBuf>> {
     let mut files = vec![];
     let mut paths = vec![path.as_ref().to_path_buf()];
     let mut traverse = |paths_in: &mut Vec<PathBuf>| -> io::Result<Vec<PathBuf>> {
@@ -32,7 +32,7 @@ pub fn list_files_recursively<P: AsRef<Path>>(path: P) -> io::Result<Vec<PathBuf
 }
 
 /// Removes all directories in this directory that has no children
-pub fn remove_empty_dirs<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
+pub fn remove_empty_dirs(path: impl AsRef<Path>) -> std::io::Result<()> {
     let path = path.as_ref();
     if path.is_dir() {
         for entry in fs::read_dir(path)? {
@@ -51,7 +51,7 @@ pub fn remove_empty_dirs<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
 }
 
 /// Same as fs::create_dir_all, but only up to the parent
-pub fn create_parent_dir_all<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
+pub fn create_parent_dir_all(path: impl AsRef<Path>) -> std::io::Result<()> {
     let path = path.as_ref();
     let path = path.parent().ok_or(std::io::Error::new(std::io::ErrorKind::NotFound, "Unable to get parent directory"))?;
     fs::create_dir_all(path)
