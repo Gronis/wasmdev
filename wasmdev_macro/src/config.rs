@@ -176,7 +176,7 @@ pub(crate) fn build_all_web_assets(config: &BuildConfig) -> Result<TokenStream, 
         Ok(ts)   => Ok(ts),
         Err(err) => match err {
             Error::IOError(msg) => return compiler_error!("Failed to build project '{}' , {msg}", config.proj_name),
-            Error::CompilerError(ts) => Ok(ts),
+            Error::CompilerError(ts) => Err(ts),
         }
     }
 }
