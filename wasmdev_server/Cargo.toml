@@ -12,3 +12,6 @@ wasmdev_core = { workspace = true }
 base64 = "0.21.0"
 sha1 = "0.10.5"
 notify = "5.0.0"
+
+[features]
+nightly = ["wasmdev_core/nightly"]

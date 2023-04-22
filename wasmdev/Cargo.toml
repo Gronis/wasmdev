@@ -19,3 +19,4 @@ wasmdev_server = { workspace = true }
 [features]
 default = ["panic_hook"]
 panic_hook = ["dep:console_error_panic_hook"]
+nightly = ["wasmdev_server/nightly", "wasmdev_macro/nightly"]
