@@ -9,14 +9,10 @@ members = [
     "examples/counter_sycamore",
     "examples/counter_yew",
     "examples/simple",
-    "examples/simple_async",
 ]
 
 [workspace.package]
 version = "0.1.6"
-
-[profile.release]
-opt-level = 'z'
 
 [profile.dev.package.wasm-bindgen-cli-support]
 opt-level = 3
