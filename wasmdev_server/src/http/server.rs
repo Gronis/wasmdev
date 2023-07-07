@@ -196,9 +196,9 @@ impl Server{
     pub fn broadcast(&self, msg: &[u8]) {
         for client in self.clients.read().unwrap().iter() {
             let mut writer = client.writer.write().unwrap();
-            let Ok(_) = writer.write_all(&[0x81, msg.len() as u8]).map_err(|err| println!("{}", err)) else { continue };
-            let Ok(_) = writer.write_all(msg)                     .map_err(|err| println!("{}", err)) else { continue };
-            let Ok(_) = writer.flush()                            .map_err(|err| println!("{}", err)) else { continue };
+            let Ok(_) = writer.write_all(&[0x81, msg.len() as u8]).map_err(|err| eprintln!("{}", err)) else { continue };
+            let Ok(_) = writer.write_all(msg)                     .map_err(|err| eprintln!("{}", err)) else { continue };
+            let Ok(_) = writer.flush()                            .map_err(|err| eprintln!("{}", err)) else { continue };
         }
     }
     pub fn listen(&self, listener: TcpListener) -> io::Result<()> {
@@ -214,8 +214,8 @@ impl Server{
 
             // Each connection uses its own thread. Simple but does not scale. Fine for dev server.
             thread::spawn(move || {
-                // defer! { println!("Closed connection {peer_addr}") };
-                // println!("Got Connection {}", peer_addr);
+                // defer! { eprintln!("Closed connection {peer_addr}") };
+                // eprintln!("Got Connection {}", peer_addr);
                 let mut upgrade_connection = false;
                 loop {
                     let Ok(req) = parse_request(&mut reader) else { return };
@@ -225,12 +225,12 @@ impl Server{
                     let send_ok = if is_valid_websocket(&req) { 
                         upgrade_connection = true;
                         let resp = make_websocket_accept_response(&req);
-                        let Ok(resp) = resp.map_err(|err| println!("{}", err)) else { return };
+                        let Ok(resp) = resp.map_err(|err| eprintln!("{}", err)) else { return };
                         write_response(&mut writer, &resp)
                     } else {
                         // Ignore query parameters
                         let mut path = req.path.split("?").next().unwrap();
-                        // println!("Got req: {path} from {peer_addr}");
+                        // eprintln!("Got req: {path} from {peer_addr}");
                         let config = config.read().unwrap();
                         let headers_and_action = loop {
                             let Some(endpoint) = config.endpoints.get(path) else { break None };
@@ -261,8 +261,8 @@ impl Server{
                         };
                         write_response(&mut writer, &resp)
                     };
-                    let Ok(_) = send_ok.map_err(|err| println!("{}", err)) else { continue };
-                    // println!("Sent HTTP response to {peer_addr}");
+                    let Ok(_) = send_ok.map_err(|err| eprintln!("{}", err)) else { continue };
+                    // eprintln!("Sent HTTP response to {peer_addr}");
                     if let Some((path, headers, ResponseAction::Content(body))) = lazy_response {
                         config.write().unwrap()
                             .on_get_request(&path)
@@ -274,28 +274,28 @@ impl Server{
                 }
                 defer! { 
                     clients.write().unwrap().retain(|client| client.addr != peer_addr);
-                    // println!("Closed WebSocket Connection {peer_addr}")
+                    // eprintln!("Closed WebSocket Connection {peer_addr}")
                 };
                 clients.write().unwrap().push(
                     Client { writer: Arc::new(RwLock::new(writer)), addr: peer_addr }
                 );
-                // println!("Got WebSocket Connection {}", peer_addr);
+                // eprintln!("Got WebSocket Connection {}", peer_addr);
                 loop {
-                    let Ok(buffer) = reader.fill_buf().map_err(|err| println!("{}", err)) else { return };
+                    let Ok(buffer) = reader.fill_buf().map_err(|err| eprintln!("{}", err)) else { return };
                     let length = buffer.len();
                     if length == 0 { break };
                     
                     // work with buffer
-                    // println!("Received websocket message from {peer_addr}: {buffer:?}");
+                    // eprintln!("Received websocket message from {peer_addr}: {buffer:?}");
                     
                     // ensure the bytes we worked with aren't returned again later
                     reader.consume(length);
 
                     // // Reply with static "reload" message
                     // let ws_message: [u8; 8] = [0x81, 0x06, b'r', b'e', b'l', b'o', b'a', b'd'];
-                    // println!("Sending websocket message to {peer_addr}");
-                    // let Ok(_) = writer.write_all(&ws_message).map_err(|err| println!("{}", err)) else { return };
-                    // let Ok(_) = writer.flush().map_err(|err| println!("{}", err)) else { return };
+                    // eprintln!("Sending websocket message to {peer_addr}");
+                    // let Ok(_) = writer.write_all(&ws_message).map_err(|err| eprintln!("{}", err)) else { return };
+                    // let Ok(_) = writer.flush().map_err(|err| eprintln!("{}", err)) else { return };
                     // // break;
                 };
             });

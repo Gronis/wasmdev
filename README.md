@@ -35,7 +35,7 @@ Compiling my-web-app
 # Project Goal
 wasmdev aims to provide the most simple way to develop your rust frontend web application. The idea is to use `cargo` just like you would do when developing a native/binary executable. No need to install tools like `trunk` or `wasm-pack`. Just add `wasmdev` to your dependencies and add a macro in front of your main function, and you have yourself a web server fit for rapid development! You can also build all web assets with a simple `cargo build --release`, and they will be minified and ready for distribution. How cool is that!
 
-# Disclaimer
+# Disclaimers
 **Note:** Project is in early stage of development. Bugs or other problems might still be present, error messages might have a long way to go etc. Don't use for large or $$$ projects. Use more tested tools like `trunk` instead.
 
 **Note:** The server application that is used to run and test your web frontend app is NOT suitable for hosting your web-app in a production environment. It lacks many common http server features and is only intended to be a fast and simple way to test and develop your web frontend app.

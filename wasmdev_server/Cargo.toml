@@ -9,9 +9,9 @@ readme      = "../README.md"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 wasmdev_core = { workspace = true }
-base64 = "0.21.0"
+base64 = "0.21.2"
 sha1 = "0.10.5"
-notify = "5.0.0"
+notify = "6.0.1"
 
 [features]
 nightly = ["wasmdev_core/nightly"]

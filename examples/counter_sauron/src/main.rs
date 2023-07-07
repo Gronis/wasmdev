@@ -1,4 +1,4 @@
-use sauron::{jss, prelude::*};
+use sauron::{*, html::text};
 enum Msg { Increment, Decrement }
 struct App { count: i32 }
 

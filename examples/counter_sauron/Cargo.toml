@@ -4,5 +4,5 @@ version = { workspace = true }
 edition = "2021"
 
 [dependencies]
-sauron = "0.51.0"
+sauron = "0.55.1"
 wasmdev =    { workspace = true }

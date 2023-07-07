@@ -7,7 +7,7 @@ edition = "2021"
 wasmdev = { workspace = true }
 
 [dependencies.web-sys]
-version = "0.3.4"
+version = "0.3.64"
 features = [
   'Document',
   'Element',

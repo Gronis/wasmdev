@@ -170,7 +170,7 @@ pub(crate) fn build_all_web_assets(config: &BuildConfig) -> Result<TokenStream, 
             .filter(|p| !p.ends_with(".rs"))
             .map(|p| quote!{ include_bytes!(#p); })
         );
-        eprintln!("\x1b[1m\x1b[92m    Finished\x1b[0m release artifacts in: '{dist_path}'");
+        eprintln!("\x1b[0m\x1b[0m\x1b[1m\x1b[32m    Finished\x1b[0m release artifacts in: '{dist_path}'");
         Ok(tt_invalidate_static_asset_cache)
     })() {
         Ok(ts)   => Ok(ts),

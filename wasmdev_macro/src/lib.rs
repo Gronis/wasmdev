@@ -195,7 +195,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                 let build_load_and_serve_app = {
                     let mut server = server.clone();
                     move || -> Option<()>{
-                        println!("\x1b[1m\x1b[92m    Building\x1b[0m wasm target");
+                        eprintln!("\x1b[0m\x1b[0m\x1b[1m\x1b[32m    Building\x1b[0m wasm target");
                         let _         = core::code::build_wasm(wasm_path, is_release, target_path)?;
                         let wasm_code = fs::read(&index_wasm_path).ok()?;
                         let js_code   = fs::read(&index_js_path).ok()?;
@@ -211,7 +211,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                                 .build()
                         });
                         if code_did_update {
-                            println!("\x1b[1m\x1b[92m     Serving\x1b[0m /index.wasm, /index.js");
+                            eprintln!("\x1b[0m\x1b[0m\x1b[1m\x1b[32m     Serving\x1b[0m /index.wasm, /index.js");
                             server.broadcast("reload /index.wasm".as_bytes());
                         }
                         Some(())
@@ -236,7 +236,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                         }
                     });
                     for (_, req_path) in file_and_req_path_iter{
-                        println!("\x1b[1m\x1b[92m     Serving\x1b[0m {}", req_path);
+                        eprintln!("\x1b[0m\x1b[0m\x1b[1m\x1b[32m     Serving\x1b[0m {}", req_path);
                     }
                 };
                 
@@ -254,7 +254,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                                 .build()
                             );
                             if file_did_update {
-                                println!("\x1b[1m\x1b[92m     Serving\x1b[0m {}", req_path);
+                                eprintln!("\x1b[0m\x1b[0m\x1b[1m\x1b[32m     Serving\x1b[0m {}", req_path);
                                 server.broadcast(format!("reload {}", req_path).as_bytes());
                             }
                         }
@@ -273,7 +273,7 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                             .build()
                         );
                         if file_did_update {
-                            println!("\x1b[1m\x1b[92m     Serving\x1b[0m /index.html");
+                            eprintln!("\x1b[0m\x1b[0m\x1b[1m\x1b[32m     Serving\x1b[0m /index.html");
                             server.broadcast("reload /index.html".as_bytes());
                         }
                     }
@@ -302,13 +302,13 @@ fn make_server_main_fn(wasm_main_fn: &TokenStream, config: AttrConfig) -> Result
                 };
 
                 let addr_char_count = addr.to_string().chars().into_iter().count();
-                print!("             ┏━━━━━━━━");
-                for _ in 0..addr_char_count { print!("━") };
-                println!("━┓");
-                println!("\x1b[1m\x1b[92m     Serving\x1b[0m ┃\x1b[1m http://{} \x1b[0m┃ <= Click to open your app! ", addr);
-                print!("             ┗━━━━━━━━");
-                for _ in 0..addr_char_count { print!("━") };
-                println!("━┛");
+                eprint!("             ┏━━━━━━━━");
+                for _ in 0..addr_char_count { eprint!("━") };
+                eprintln!("━┓");
+                eprintln!("\x1b[0m\x1b[0m\x1b[1m\x1b[32m     Serving\x1b[0m ┃\x1b[1m http://{} \x1b[0m┃ <= Click to open your app! ", addr);
+                eprint!("             ┗━━━━━━━━");
+                for _ in 0..addr_char_count { eprint!("━") };
+                eprintln!("━┛");
 
                 let Ok(()) = server.listen(tcp_socket) else { 
                     panic!("Unable to handle incomming connection")

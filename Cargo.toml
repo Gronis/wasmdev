@@ -12,13 +12,13 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.6"
+version = "0.1.7"
 
 [profile.dev.package.wasm-bindgen-cli-support]
 opt-level = 3
 
 [workspace.dependencies]
-wasmdev        = { version = "0.1.6", path = "./wasmdev" }
-wasmdev_core   = { version = "0.1.6", path = "./wasmdev_core" }
-wasmdev_macro  = { version = "0.1.6", path = "./wasmdev_macro" }
-wasmdev_server = { version = "0.1.6", path = "./wasmdev_server" }
+wasmdev        = { version = "0.1.7", path = "./wasmdev" }
+wasmdev_core   = { version = "0.1.7", path = "./wasmdev_core" }
+wasmdev_macro  = { version = "0.1.7", path = "./wasmdev_macro" }
+wasmdev_server = { version = "0.1.7", path = "./wasmdev_server" }

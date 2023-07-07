@@ -47,13 +47,13 @@ pub fn build_wasm(input_path: impl AsRef<Path>, is_release: bool, target_dir: im
     Bindgen::new()
         .input_path(&input_path)
         .web(true)
-        .map_err(|err| println!("{}", err)).ok()?
-        .demangle(is_release)
+        .map_err(|err| eprintln!("{}", err)).ok()?
+        .demangle(!is_release)
         .debug(!is_release)
         .remove_name_section(is_release)
         .remove_producers_section(is_release)
         .generate(output_path)
-        .map_err(|err| println!("{}", err)).ok()
+        .map_err(|err| eprintln!("{}", err)).ok()
 }
 
 pub fn minify_javascript(code_in: &[u8]) -> Option<Vec<u8>>{
