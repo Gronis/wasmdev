@@ -1,11 +1,11 @@
 use leptos::*;
 
 #[component]
-pub fn Counter(cx: Scope, initial_value: i32) -> impl IntoView {
-    let (value, set_value) = create_signal(cx, initial_value);
+pub fn Counter(initial_value: i32) -> impl IntoView {
+    let (value, set_value) = create_signal(initial_value);
     let decrement = move |_| set_value.update(|value| *value -= 1);
     let increment = move |_| set_value.update(|value| *value += 1);
-    view! { cx,
+    view! {
         <table>
             <td>
                 <tr><button on:click=increment>"+"</button></tr>
@@ -18,7 +18,7 @@ pub fn Counter(cx: Scope, initial_value: i32) -> impl IntoView {
 
 #[wasmdev::main(port: 3000, path: "www")]
 fn main() {
-    mount_to_body(|cx| view! { cx, 
+    mount_to_body(|| view! {
         <Counter initial_value=0 />
     })
 }
